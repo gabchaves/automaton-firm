@@ -91,7 +91,7 @@ because it was established for ~$0.
    └───────────────────────┬────────────────────────────┘
                            │
                     ┌──────▼───────┐
-                    │  SQLite (v9)  │  orders · positions · fills · traders
+                    │  SQLite (v12) │  orders · positions · fills · traders
                     └──────────────┘
 ```
 
@@ -167,10 +167,11 @@ Conway API. This decouples Phase 1 from the degraded control plane.
 
 ---
 
-## 6. Data Model (SQLite migration v9)
+## 6. Data Model (SQLite migration v12)
 
 New tables, following the existing versioned-migration pattern in
-`src/state/database.ts`:
+`src/state/database.ts` (schema is currently at v11; ARCHITECTURE.md's
+"v1→v8" is stale). SQL consts live in `src/state/schema.ts`:
 
 - **`traders`** — `id`, `name`, `role` (`senior`|`intern`), `parent_id`
   (nullable), `book_balance_cents`, `status` (`live`|`dead`|`promoted`),
@@ -268,7 +269,7 @@ is reused rather than re-parameterized.
 ## 11. Build Order (for the implementation plan)
 
 1. `LocalClient` — unblocks running anything without Conway.
-2. Migration v9 + `src/trading/` (feed, book, simulator) with tests.
+2. Migration v12 + `src/trading/` (feed, book, simulator) with tests.
 3. Trading tools + tool-profile filter + `executeTool` fail-closed.
 4. `TradingHarness` + registration.
 5. HR/firm heartbeat tasks + trading-risk policy rules.
