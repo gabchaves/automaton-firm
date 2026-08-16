@@ -22,6 +22,8 @@ import { createLogger } from "../observability/logger.js";
 import { getMetrics } from "../observability/metrics.js";
 import { AlertEngine, createDefaultAlertRules } from "../observability/alerts.js";
 import { metricsInsertSnapshot, metricsPruneOld } from "../state/database.js";
+import { deathSweep, backfillSeniors } from "../trading/firm.js";
+import { listTraders } from "../trading/repo.js";
 import { ulid } from "ulid";
 
 const logger = createLogger("heartbeat.tasks");
@@ -41,6 +43,8 @@ export const COLONY_TASK_INTERVALS_MS = {
   agent_pool_optimize: 1_800_000,
   knowledge_store_prune: 86_400_000,
   dead_agent_cleanup: 3_600_000,
+  trader_tick: 14_400_000,
+  firm_hr: 14_400_000,
 } as const;
 
 export const BUILTIN_TASKS: Record<string, HeartbeatTaskFn> = {
@@ -701,6 +705,44 @@ export const BUILTIN_TASKS: Record<string, HeartbeatTaskFn> = {
       return { shouldWake: false };
     } catch (error) {
       logger.error("dead_agent_cleanup failed", error instanceof Error ? error : undefined);
+      return { shouldWake: false };
+    }
+  },
+
+  firm_hr: async (_ctx: TickContext, taskCtx: HeartbeatLegacyContext) => {
+    try {
+      const now = new Date().toISOString();
+      const db = taskCtx.db.raw;
+      const swept = deathSweep(db, now);
+      if (swept.length > 0) {
+        logger.info(`firm_hr deathSweep removed dead traders: ${swept.join(", ")}`);
+      }
+
+      const backfilled = backfillSeniors(
+        db,
+        { seniorFloor: 3, seniorStartCents: 10_000, baseStrategySkill: "strategy-base" },
+        now,
+        () => ulid(),
+      );
+      if (backfilled.length > 0) {
+        logger.info(`firm_hr backfillSeniors hired ${backfilled.length} new senior traders`);
+      }
+
+      return { shouldWake: false };
+    } catch (error) {
+      logger.error("firm_hr failed", error instanceof Error ? error : undefined);
+      return { shouldWake: false };
+    }
+  },
+
+  trader_tick: async (_ctx: TickContext, taskCtx: HeartbeatLegacyContext) => {
+    try {
+      const db = taskCtx.db.raw;
+      const liveTraders = listTraders(db, "live");
+      logger.info(`trader_tick active for ${liveTraders.length} live traders`);
+      return { shouldWake: false };
+    } catch (error) {
+      logger.error("trader_tick failed", error instanceof Error ? error : undefined);
       return { shouldWake: false };
     }
   },
