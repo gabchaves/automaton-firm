@@ -5,7 +5,7 @@
  * The database IS the automaton's memory.
  */
 
-export const SCHEMA_VERSION = 11;
+export const SCHEMA_VERSION = 12;
 
 export const CREATE_TABLES = `
   -- Schema version tracking
@@ -678,4 +678,57 @@ export const MIGRATION_V10 = `
 
   CREATE INDEX idx_knowledge_category ON knowledge_store(category);
   CREATE INDEX idx_knowledge_key ON knowledge_store(key);
+`;
+
+export const MIGRATION_V12 = `
+  -- Schema version: 12
+  -- Trading firm: traders, orders, positions, fills
+
+  CREATE TABLE IF NOT EXISTS traders (
+    id TEXT PRIMARY KEY,                 -- ULID
+    name TEXT NOT NULL,
+    role TEXT NOT NULL,                  -- 'senior' | 'intern'
+    parent_id TEXT,                      -- nullable; intern's staking senior
+    book_balance_cents INTEGER NOT NULL,
+    status TEXT NOT NULL,                -- 'live' | 'dead' | 'promoted'
+    generation INTEGER NOT NULL DEFAULT 0,
+    strategy_skill TEXT,                 -- ref/path to inherited SKILL.md
+    born_at TEXT NOT NULL,
+    died_at TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS orders (
+    id TEXT PRIMARY KEY,
+    trader_id TEXT NOT NULL,
+    symbol TEXT NOT NULL,
+    side TEXT NOT NULL,                  -- 'buy' | 'sell'
+    size REAL NOT NULL,                  -- asset quantity
+    price_cents INTEGER NOT NULL,        -- fill price, integer cents/unit
+    status TEXT NOT NULL,                -- 'filled' | 'rejected'
+    created_at TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS positions (
+    id TEXT PRIMARY KEY,
+    trader_id TEXT NOT NULL,
+    symbol TEXT NOT NULL,
+    qty REAL NOT NULL,
+    avg_entry_cents INTEGER NOT NULL,
+    opened_at TEXT NOT NULL,
+    closed_at TEXT,
+    realized_pnl_cents INTEGER NOT NULL DEFAULT 0
+  );
+
+  CREATE TABLE IF NOT EXISTS fills (
+    id TEXT PRIMARY KEY,
+    order_id TEXT NOT NULL,
+    trader_id TEXT NOT NULL,
+    price_cents INTEGER NOT NULL,
+    qty REAL NOT NULL,
+    filled_at TEXT NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_orders_trader ON orders(trader_id);
+  CREATE INDEX IF NOT EXISTS idx_positions_trader ON positions(trader_id);
+  CREATE INDEX IF NOT EXISTS idx_traders_status ON traders(status);
 `;
