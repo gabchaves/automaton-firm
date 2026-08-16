@@ -2,6 +2,7 @@ import type { AgentHarness } from "./harness-types.js";
 import { CodingHarness } from "./harnesses/coding-harness.js";
 import { GeneralHarness } from "./harnesses/general-harness.js";
 import { OrchestratorHarness } from "./harnesses/orchestrator-harness.js";
+import { TradingHarness } from "./harnesses/trading-harness.js";
 
 type HarnessConstructor = new () => AgentHarness;
 
@@ -28,6 +29,8 @@ const DEFAULT_ROLE_MAP: Record<string, HarnessConstructor> = {
   "financial-analyst": GeneralHarness,
   writer: GeneralHarness,
   analyst: GeneralHarness,
+
+  trader: TradingHarness,
 };
 
 export class HarnessRegistry {

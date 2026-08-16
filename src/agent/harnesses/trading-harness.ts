@@ -1,0 +1,118 @@
+import { BaseHarness } from "./base-harness.js";
+import type { HarnessTool } from "../harness-types.js";
+import { toolsForRole } from "../tool-profiles.js";
+import { getTrader, loadBook } from "../../trading/repo.js";
+import { executeTool } from "../tools.js";
+import { sanitizeToolResult } from "../injection-defense.js";
+import type { SpendTrackerInterface } from "../../types.js";
+
+const NOOP_SPEND_TRACKER: SpendTrackerInterface = {
+  recordSpend: () => {},
+  getHourlySpend: () => 0,
+  getDailySpend: () => 0,
+  getTotalSpend: () => 0,
+  checkLimit: () => ({
+    allowed: true,
+    currentHourlySpend: 0,
+    currentDailySpend: 0,
+    limitHourly: Number.MAX_SAFE_INTEGER,
+    limitDaily: Number.MAX_SAFE_INTEGER,
+  }),
+  pruneOldRecords: () => 0,
+};
+
+export class TradingHarness extends BaseHarness {
+  readonly id = "trader";
+  readonly description = "Paper-trading agent for systematic crypto book management, trade execution, and journal logging.";
+
+  buildSystemPrompt(): string {
+    const traderId =
+      (this.task?.assignedTo as string | undefined) ??
+      ((this.task as any)?.params?.traderId as string | undefined) ??
+      this.task?.id ??
+      "trader-default";
+
+    let bookInfo = "No active book found.";
+    let role = "senior";
+    let strategy = "";
+
+    if (this.context?.db) {
+      const trader = getTrader(this.context.db, traderId);
+      if (trader) {
+        role = trader.role;
+        strategy = trader.strategySkill ? `\nStrategy Skill: ${trader.strategySkill}` : "";
+        const book = loadBook(this.context.db, traderId);
+        bookInfo = `Cash Balance: $${(book.balanceCents / 100).toFixed(2)} (${book.balanceCents} cents)\nPositions: ${JSON.stringify(book.positions)}`;
+      }
+    }
+
+    return `You are an autonomous paper trader with role: ${role}.
+Trader ID: ${traderId}${strategy}
+
+## Current Book State
+${bookInfo}
+
+## Instructions & Rules
+1. Analyze market prices and candles using get_candles and get_price.
+2. Manage your positions responsibly according to your strategy.
+3. Use place_order and close_position to execute trades.
+4. Record reflections and lessons with write_journal after closing trades.
+5. If eligible and profitable, hire interns with hire_intern to scale operations.
+6. When your cycle analysis/execution is complete, call task_done.`;
+  }
+
+  getToolDefs(): HarnessTool[] {
+    const taskDoneTool: HarnessTool = {
+      name: "task_done",
+      description: "Signal that you have completed your trading tick analysis and actions.",
+      parameters: {
+        type: "object",
+        properties: {
+          summary: { type: "string", description: "Summary of trading decisions and actions taken" },
+        },
+        required: ["summary"],
+      },
+      execute: async (args) => {
+        return `Task completed: ${args.summary}`;
+      },
+    };
+
+    const catalog = this.context.toolCatalog ?? [];
+    const traderCatalogTools = toolsForRole("trader", catalog);
+    const wrappedCatalogTools: HarnessTool[] = traderCatalogTools.flatMap((t) => {
+      if (t.name === "task_done") return [];
+      return [
+        {
+          name: t.name,
+          description: t.description,
+          parameters: t.parameters,
+          execute: async (args) => {
+            if (!this.context.toolContext) {
+              return `Error: Tool context is unavailable for '${t.name}'`;
+            }
+
+            const result = await executeTool(
+              t.name,
+              args,
+              catalog,
+              this.context.toolContext,
+              this.context.policyEngine,
+              {
+                inputSource: "system",
+                turnToolCallCount: 0,
+                sessionSpend: this.context.spendTracker ?? NOOP_SPEND_TRACKER,
+              },
+            );
+
+            if (result.error) {
+              return `Error: ${result.error}`;
+            }
+            return sanitizeToolResult(result.result);
+          },
+        },
+      ];
+    });
+
+    return [taskDoneTool, ...wrappedCatalogTools];
+  }
+}
