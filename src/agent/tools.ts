@@ -21,6 +21,7 @@ import type {
 } from "../types.js";
 import type { PolicyEngine } from "./policy-engine.js";
 import { sanitizeToolResult, sanitizeInput } from "./injection-defense.js";
+import { isIdleOnlyTool } from "./idle-only-tools.js";
 import { createLogger } from "../observability/logger.js";
 
 const logger = createLogger("tools");
@@ -37,10 +38,10 @@ const SANDBOX_HOME = "/root";
 function confinePathToSandbox(filePath: string): string | { error: string } {
   // Resolve ~ to SANDBOX_HOME
   const expanded = filePath.startsWith("~")
-    ? nodePath.join(SANDBOX_HOME, filePath.slice(1))
+    ? nodePath.posix.join(SANDBOX_HOME, filePath.slice(1))
     : filePath;
   // Resolve to absolute (relative paths resolve against SANDBOX_HOME)
-  const resolved = nodePath.resolve(SANDBOX_HOME, expanded);
+  const resolved = nodePath.posix.resolve(SANDBOX_HOME, expanded);
   // Ensure the resolved path is within the sandbox home
   if (resolved !== SANDBOX_HOME && !resolved.startsWith(SANDBOX_HOME + "/")) {
     return {
@@ -3313,6 +3314,19 @@ export async function executeTool(
       result: "",
       durationMs: 0,
       error: `Unknown tool: ${toolName}`,
+    };
+  }
+
+  // Fail closed: enforcement is mandatory for non-safe tools.
+  const isSafe = tool.riskLevel === "safe" || isIdleOnlyTool(toolName);
+  if ((!policyEngine || !turnContext) && !isSafe) {
+    return {
+      id: ulid(),
+      name: toolName,
+      arguments: args,
+      result: "",
+      durationMs: Date.now() - startTime,
+      error: `Policy engine unavailable — denied '${toolName}' (fail-closed).`,
     };
   }
 
