@@ -22,8 +22,9 @@ import { createLogger } from "../observability/logger.js";
 import { getMetrics } from "../observability/metrics.js";
 import { AlertEngine, createDefaultAlertRules } from "../observability/alerts.js";
 import { metricsInsertSnapshot, metricsPruneOld } from "../state/database.js";
-import { deathSweep, backfillSeniors } from "../trading/firm.js";
+import { deathSweep, backfillSeniors, runPromotion } from "../trading/firm.js";
 import { listTraders } from "../trading/repo.js";
+import { promotionMetric } from "../trading/metrics.js";
 import { runTraderTick } from "../trading/tick-runner.js";
 import { createBinanceFeed } from "../trading/feed.js";
 import { ProviderRegistry } from "../inference/provider-registry.js";
@@ -734,6 +735,16 @@ export const BUILTIN_TASKS: Record<string, HeartbeatTaskFn> = {
       );
       if (backfilled.length > 0) {
         logger.info(`firm_hr backfillSeniors hired ${backfilled.length} new senior traders`);
+      }
+
+      const MIN_CLOSED_TRADES_FOR_PROMOTION = 3;
+      const promoted = runPromotion(
+        db,
+        { seniorFloor: 3, seniorStartCents: 10_000, baseStrategySkill: "strategy-base" },
+        promotionMetric(db, MIN_CLOSED_TRADES_FOR_PROMOTION),
+      );
+      if (promoted) {
+        logger.info(`firm_hr promoted intern ${promoted} to senior`);
       }
 
       return { shouldWake: false };

@@ -64,8 +64,34 @@ export function eligibleForPromotion(
   const liveInterns = listTraders(db, "live").filter((t) => t.role === "intern");
   if (liveInterns.length === 0) return null;
 
-  const scored = liveInterns.map((i) => ({ id: i.id, score: metric(i.id) }));
-  scored.sort((a, b) => b.score - a.score);
+  const scored = liveInterns
+    .map((i) => ({ id: i.id, score: metric(i.id) }))
+    .filter((s) => Number.isFinite(s.score) && s.score > 0)
+    .sort((a, b) => b.score - a.score);
 
   return scored[0]?.id ?? null;
 }
+
+export function promoteTrader(db: DatabaseType, internId: string): void {
+  db.prepare("UPDATE traders SET role = 'senior', parent_id = NULL WHERE id = ?").run(internId);
+}
+
+export function runPromotion(
+  db: DatabaseType,
+  cfg: FirmConfig,
+  metric: (id: string) => number,
+): string | null {
+  const liveSeniors = listTraders(db, "live").filter((t) => t.role === "senior").length;
+  if (liveSeniors >= cfg.seniorFloor) return null; // no open slot
+
+  const interns = listTraders(db, "live").filter((t) => t.role === "intern");
+  const scored = interns
+    .map((i) => ({ id: i.id, score: metric(i.id) }))
+    .filter((s) => Number.isFinite(s.score) && s.score > 0)
+    .sort((a, b) => b.score - a.score);
+
+  const best = scored[0]?.id ?? null;
+  if (best) promoteTrader(db, best);
+  return best;
+}
+
