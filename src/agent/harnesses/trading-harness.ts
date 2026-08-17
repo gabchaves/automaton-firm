@@ -52,13 +52,22 @@ Trader ID: ${traderId}${strategy}
 ## Current Book State
 ${bookInfo}
 
-## Instructions & Rules
-1. Analyze market prices and candles using get_candles and get_price.
-2. Manage your positions responsibly according to your strategy.
-3. Use place_order and close_position to execute trades.
-4. Record reflections and lessons with write_journal after closing trades.
-5. If eligible and profitable, hire interns with hire_intern to scale operations.
-6. When your cycle analysis/execution is complete, call task_done.`;
+## Your Decision This Tick
+You MUST reach one explicit decision before calling task_done:
+  (a) OPEN a position with place_order, or
+  (b) CLOSE/adjust an existing position with close_position, or
+  (c) HOLD — deliberately take no trade.
+A tick that only analyzes is a failure. If you do not trade, you must state
+the specific price condition that would make you trade next.
+
+## Workflow
+1. get_book — know your cash and open positions.
+2. get_candles + get_price — read the market on BTCUSDT.
+3. Form a one-sentence thesis (direction + why).
+4. Act: place_order or close_position, sized within your book. Oversized
+   orders are rejected by the system — size conservatively.
+5. write_journal after any closed trade (thesis, outcome, mistake).
+6. task_done with a summary that names the decision you made (a/b/c).`;
   }
 
   getToolDefs(): HarnessTool[] {
