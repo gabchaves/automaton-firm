@@ -1,13 +1,21 @@
+/**
+ * Live CEO-driven evolution (gated by RUN_EVOLUTION=1). Evolves strategy
+ * generations over disjoint train/eval historical windows using real inference
+ * (fal/Gemini). Not a CI test.
+ *
+ *   RUN_EVOLUTION=1 FAL_API_KEY=... vitest run evolution
+ */
+import path from "node:path";
+import os from "node:os";
 import { describe, it, expect } from "vitest";
 import { createDatabase } from "../../state/database.js";
 import { createBinanceFeed } from "../../trading/feed.js";
 import { evolveGenerations } from "../../trading/evolve.js";
-import { loadConfig } from "../../config.js";
-import { loadWalletFromDisk } from "../../identity/wallet.js";
-import { LocalClient } from "../../conway/local-client.js";
-import { UnifiedInferenceClient } from "../../inference/inference-client.js";
 import { ProviderRegistry } from "../../inference/provider-registry.js";
+import { UnifiedInferenceClient } from "../../inference/inference-client.js";
 import { createWorkerInferenceBridge } from "../../agent/worker-inference-bridge.js";
+import { createLocalClient } from "../../conway/local-client.js";
+import { createTestConfig, createTestIdentity } from "../mocks.js";
 
 const runEvolution = process.env.RUN_EVOLUTION === "1";
 
@@ -15,60 +23,43 @@ describe.skipIf(!runEvolution)("Live CEO-Driven Evolution (gated)", () => {
   it(
     "evolves strategy lineages over disjoint train and eval historical windows",
     async () => {
-      console.log("Fetching historical candles from Binance...");
-      const binance = createBinanceFeed();
-      // Fetch 40 candles: first 20 for train, next 20 for out-of-sample eval
-      const allCandles = await binance.getCandles("BTCUSDT", "4h", 40);
-      expect(allCandles.length).toBeGreaterThanOrEqual(30);
+      const home = process.env.HOME || process.env.USERPROFILE || os.homedir();
 
+      // Fetch 40 candles: first 20 for train, next 20 for out-of-sample eval.
+      const allCandles = await createBinanceFeed().getCandles("BTCUSDT", "4h", 40);
+      expect(allCandles.length).toBeGreaterThanOrEqual(30);
       const midpoint = Math.floor(allCandles.length / 2);
       const trainCandles = allCandles.slice(0, midpoint);
       const evalCandles = allCandles.slice(midpoint);
+      console.log(`Disjoint windows: Train = ${trainCandles.length} candles, Eval = ${evalCandles.length} candles`);
 
-      console.log(
-        `Disjoint windows: Train = ${trainCandles.length} candles, Eval = ${evalCandles.length} candles`,
+      const providersPath = path.join(home, ".automaton", "inference-providers.json");
+      const inference = createWorkerInferenceBridge(
+        new UnifiedInferenceClient(ProviderRegistry.fromConfig(providersPath)),
       );
-
-      const config = loadConfig();
-      if (!config) throw new Error("Missing automaton config");
-      const wallet = loadWalletFromDisk();
-      if (!wallet) throw new Error("Missing wallet");
-
-      const identity = {
-        address: wallet.address,
-        privateKey: wallet.privateKey,
-        publicKey: wallet.publicKey,
-      };
-
-      const providers = new ProviderRegistry(config.inferenceProviders);
-      const unifiedInference = new UnifiedInferenceClient(providers, config.modelStrategy);
-      const workerInference = createWorkerInferenceBridge(unifiedInference, config.modelStrategy);
-      const conway = new LocalClient(config, identity.address);
+      const conway = createLocalClient({ startingCents: 100_000, getSpentCents: () => 0, homeDir: home });
       const db = createDatabase(":memory:");
 
       const records = await evolveGenerations({
         db,
         conway,
-        config,
-        identity,
-        inference: workerInference,
+        config: createTestConfig(),
+        identity: createTestIdentity(),
+        inference,
         trainCandles,
         evalCandles,
         generations: 2,
         startCents: 10_000,
+        homeDir: home,
       });
 
-      console.log("\n==========================================");
-      console.log("       STRATEGY EVOLUTION LINEAGE         ");
-      console.log("==========================================");
+      console.log("\n========== STRATEGY EVOLUTION LINEAGE ==========");
       for (const r of records) {
         console.log(`Generation ${r.generation}: ${r.strategySkill}`);
-        console.log(
-          `  Out-of-Sample PnL: $${(r.evalResult.realizedPnlCents / 100).toFixed(2)}, Max DD: $${(r.evalResult.maxDrawdownCents / 100).toFixed(2)}, Trades: ${r.evalResult.closedTrades}`,
-        );
-        console.log(`  Kept As Incumbent: ${r.keptAsIncumbent ? "YES" : "NO"}`);
+        console.log(`  Out-of-sample: PnL $${(r.evalResult.realizedPnlCents / 100).toFixed(2)}, MaxDD $${(r.evalResult.maxDrawdownCents / 100).toFixed(2)}, Trades ${r.evalResult.closedTrades}`);
+        console.log(`  Kept as incumbent: ${r.keptAsIncumbent ? "YES" : "NO"}`);
         console.log(`  Verdict: ${r.verdictReason}`);
-        console.log("------------------------------------------");
+        console.log("-----------------------------------------------");
       }
 
       expect(records.length).toBe(2);
