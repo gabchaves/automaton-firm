@@ -61,6 +61,9 @@ describe("runHrReview", () => {
     const hired = result.events.find((e) => e.type === "trader_hired");
     expect(hired).toBeDefined();
     expect((hired!.payload as { stakeMc: number }).stakeMc).toBe(100_000);
+    // Lineage must survive into the event: the mutant's parent is a live trader.
+    const parentTraderId = (hired!.payload as { parentTraderId: string | null }).parentTraderId;
+    expect(result.evolved.traders.some((t) => t.id === parentTraderId && t.status === "live")).toBe(true);
     expect(result.evolved.traders.filter((t) => t.status === "live").length).toBe(5);
     expect(result.events.some((e) => e.type === "hr_review")).toBe(true);
   });

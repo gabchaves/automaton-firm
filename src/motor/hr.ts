@@ -23,7 +23,7 @@ import type { HrConfig, TraderEvidence } from "../trading/hr-evaluation.js";
 import { forceClose, initDirectionalStepState } from "../trading/directional-step.js";
 import { mutateGenome, randomGenome } from "../trading/genome.js";
 import {
-  ROSTER_SIZE, TRADER_START_MC, FEE_BPS, hashSeed, topGenomes, traderEquityMc,
+  ROSTER_SIZE, TRADER_START_MC, FEE_BPS, hashSeed, traderEquityMc,
 } from "./cohort.js";
 import type { CohortRuntime, TraderRuntime } from "./cohort.js";
 import { traderName } from "./names.js";
@@ -129,7 +129,13 @@ function hireReplacement(
   generationId: string,
   mkId: () => string,
 ): HireOutcome {
-  const parent = topGenomes(liveGenomes, 1)[0] ?? null;
+  // Same top-1 semantics as topGenomes (peakBookMc desc, stable on ties), but
+  // keeping the owning trader so the hire's lineage survives into the event.
+  const parentTrader = liveGenomes.traders.reduce<TraderRuntime | null>(
+    (best, t) => (best === null || t.peakBookMc > best.peakBookMc ? t : best),
+    null,
+  );
+  const parent = parentTrader?.genome ?? null;
   const seed = hashSeed(genNumber, ts % 1_000_003, slot);
   const genome = parent ? mutateGenome(parent, seed) : randomGenome(seed);
   const id = mkId();
@@ -153,7 +159,7 @@ function hireReplacement(
 
   const event: MotorEventDraft = {
     ts, type: "trader_hired", traderId: id, generationId,
-    payload: { name, slot, stakeMc, parentTraderId: null },
+    payload: { name, slot, stakeMc, parentTraderId: parentTrader?.id ?? null },
   };
 
   return { trader, event };
