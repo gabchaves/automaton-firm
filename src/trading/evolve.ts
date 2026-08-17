@@ -37,6 +37,7 @@ export async function evolveGenerations(deps: {
   startCents: number;
   homeDir?: string;
   symbol?: string;
+  onGeneration?: (record: GenerationRecord) => void;
 }): Promise<GenerationRecord[]> {
   const symbol = deps.symbol ?? "BTCUSDT";
   const home = deps.homeDir ?? process.env.HOME ?? process.env.USERPROFILE ?? process.cwd();
@@ -127,13 +128,17 @@ export async function evolveGenerations(deps: {
       incumbentStrategy = draft.name;
     }
 
-    records.push({
+    const record: GenerationRecord = {
       generation: gen,
       strategySkill: draft.name,
       evalResult: evalResultCandidate,
       keptAsIncumbent: won,
       verdictReason: verdict.reason,
-    });
+    };
+    records.push(record);
+    // Persist incrementally so an interrupted/timed-out run still yields
+    // whatever generations completed.
+    deps.onGeneration?.(record);
   }
 
   return records;

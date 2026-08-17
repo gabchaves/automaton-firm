@@ -17,3 +17,5 @@ firm-dashboard.html
 firm-live-run.log
 firm-live.db
 evolution.txt
+evolution-lineage.jsonl
+evolution-lineage.html
