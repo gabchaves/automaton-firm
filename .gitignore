@@ -11,3 +11,6 @@ dist
 .automaton/wallet.json
 .automaton/state.db
 
+
+# generated dashboard snapshot
+firm-dashboard.html
