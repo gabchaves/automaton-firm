@@ -15,6 +15,7 @@
 - **Node 22** (`fnm use 22`). `HOME=$USERPROFILE` on Windows. The carry track needs **no** native module (DB-free) — `better-sqlite3` is irrelevant here.
 - **ESM `.js` specifiers** in all TS imports. Prices are **integer cents**. `fundingRate` is a **fraction per 8h** (`0.0001` = 1 bp); `CarryParams` thresholds are in **bps**; the engine converts once (`fundingBps = fundingRate * 10_000`).
 - **Fees are engine constants, never CEO-tunable:** `SPOT_TAKER_BPS = 10`, `PERP_TAKER_BPS = 5`; entry and exit each pay `SPOT_TAKER_BPS + PERP_TAKER_BPS = 15` bps of notional (≈30 bps round-trip).
+- **Position size is a fixed engine constant (`CAPITAL_FRACTION = 0.5`), not a CEO param** (post-review correction): absolute-net scoring scales with size, so a tunable size would let evolution win by leverage instead of timing. `CarryParams` is timing-only (`enterFundingBps`, `exitFundingBps`, `maxHoldBars`, `minBarsBetweenTrades`). Size becomes tunable in v2 once basis risk is modeled.
 - Run tests via vitest. **Pre-existing repo test failures are NOT yours** — do not fix unrelated failures.
 - Do NOT touch `src/agent/policy-rules/`, `src/agent/injection-defense.ts`, `src/agent/self-mod/`.
 - Commit trailer: `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`.

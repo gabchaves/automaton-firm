@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { runCarryBacktest } from "../../trading/carry-engine.js";
 import type { CarryBar, CarryParams } from "../../trading/carry-types.js";
 
-const params: CarryParams = { enterFundingBps: 1, exitFundingBps: 0, maxHoldBars: 999, capitalFraction: 1, minBarsBetweenTrades: 0 };
+const params: CarryParams = { enterFundingBps: 1, exitFundingBps: 0, maxHoldBars: 999, minBarsBetweenTrades: 0 };
 const bar = (fundingRate: number, time = 0): CarryBar => ({ time, spotCents: 5_000_000, markCents: 5_000_000, fundingRate });
 
 describe("carry engine", () => {
@@ -10,12 +10,13 @@ describe("carry engine", () => {
     // 100 bars at 2 bp. Enters bar 0 (funding starts next bar), holds to the end.
     const bars = Array.from({ length: 100 }, (_, i) => bar(0.0002, i));
     const r = runCarryBacktest(bars, params, 1_000_000);
-    // notional = 1.0 * 1,000,000. funding/bar = round(0.0002 * 1,000,000) = 200, over 99 held bars = 19,800.
-    // entry fee = exit fee = round(1,000,000 * 15 / 10000) = 1,500 -> fees = 3,000.
-    expect(r.fundingCollectedCents).toBe(19_800);
-    expect(r.feesPaidCents).toBe(3_000);
-    expect(r.realizedPnlCents).toBe(16_800);
-    expect(r.finalEquityCents).toBe(1_016_800);
+    // Fixed CAPITAL_FRACTION = 0.5 -> notional = 500,000.
+    // funding/bar = round(0.0002 * 500,000) = 100, over 99 held bars = 9,900.
+    // entry fee = exit fee = round(500,000 * 15 / 10000) = 750 -> fees = 1,500.
+    expect(r.fundingCollectedCents).toBe(9_900);
+    expect(r.feesPaidCents).toBe(1_500);
+    expect(r.realizedPnlCents).toBe(8_400);
+    expect(r.finalEquityCents).toBe(1_008_400);
     expect(r.closedTrades).toBe(1);
   });
 

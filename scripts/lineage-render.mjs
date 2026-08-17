@@ -28,7 +28,7 @@ export function renderLineageRows(records) {
         ? '<span style="color:#1a7f37;font-weight:600">ADOTADA</span>'
         : '<span style="color:#57606a">descartada</span>';
       const p = r.params || {};
-      const paramStr = `enter ${p.enterFundingBps}bps · exit ${p.exitFundingBps}bps · hold≤${p.maxHoldBars} · frac ${p.capitalFraction} · cd ${p.minBarsBetweenTrades}`;
+      const paramStr = `enter ${p.enterFundingBps}bps · exit ${p.exitFundingBps}bps · hold≤${p.maxHoldBars} · cd ${p.minBarsBetweenTrades}`;
       return `<tr>
         <td>${esc(r.generation)}</td>
         <td><code>${esc(r.strategySkill)}</code></td>

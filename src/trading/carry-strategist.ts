@@ -54,17 +54,16 @@ export async function formulateCarryStrategy(deps: {
     `- Cycles: ${deps.priorResult.closedTrades} (${lostCycles} lost money)`,
     `- Max drawdown: $${(deps.priorResult.maxDrawdownCents / 100).toFixed(2)}`,
     ``,
-    `## Engine rules`,
+    `## Engine rules (you tune TIMING only; position size is fixed by the firm)`,
     `- enterFundingBps: enter when funding (bps/8h) >= this`,
     `- exitFundingBps: exit when funding <= this (keep enter > exit for hysteresis)`,
     `- maxHoldBars: hard cap on funding intervals held (8h each)`,
-    `- capitalFraction: 0..1 of equity deployed as notional`,
     `- minBarsBetweenTrades: cooldown bars between cycles (raise to cut churn)`,
     ``,
     `## Output`,
     `Return ONLY a JSON object with keys enterFundingBps, exitFundingBps, maxHoldBars,`,
-    `capitalFraction, minBarsBetweenTrades, and rationale (a short string explaining the`,
-    `change vs the incumbent). No prose outside the JSON.`,
+    `minBarsBetweenTrades, and rationale (a short string explaining the change vs the`,
+    `incumbent). No prose outside the JSON.`,
   ].join("\n");
 
   const response = await deps.inference.chat({

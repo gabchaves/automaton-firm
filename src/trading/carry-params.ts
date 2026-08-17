@@ -5,7 +5,6 @@ export const CARRY_PARAMS_SCHEMA = z.object({
   enterFundingBps: z.number().finite(),
   exitFundingBps: z.number().finite(),
   maxHoldBars: z.number().int().positive(),
-  capitalFraction: z.number().min(0).max(1),
   minBarsBetweenTrades: z.number().int().min(0),
 });
 
@@ -13,7 +12,6 @@ export const DEFAULT_CARRY_PARAMS: CarryParams = {
   enterFundingBps: 1,
   exitFundingBps: 0,
   maxHoldBars: 90,
-  capitalFraction: 0.5,
   minBarsBetweenTrades: 3,
 };
 

@@ -5,6 +5,14 @@ const PERP_TAKER_BPS = 5;  // Binance USDT-M futures taker 0.05%
 const ENTRY_FEE_BPS = SPOT_TAKER_BPS + PERP_TAKER_BPS; // buy spot + short perp
 const EXIT_FEE_BPS = SPOT_TAKER_BPS + PERP_TAKER_BPS;  // sell spot + close perp
 
+// Fixed capital deployed as notional — NOT a CEO-tunable parameter. Net funding
+// scales linearly with size, so if the CEO could raise it, the evolution would
+// "win" by leverage instead of timing skill (and v1 drawdown ignores basis risk,
+// so bigger size wouldn't even be penalized). Pinning it means a rising lineage
+// reflects better timing. 0.5 also mirrors a realistic delta-neutral split
+// (~half equity in the spot leg, ~half as perp-short margin).
+const CAPITAL_FRACTION = 0.5;
+
 const toBps = (rate: number): number => rate * 10_000;
 const feeCents = (notionalCents: number, feeBps: number): number => Math.round((notionalCents * feeBps) / 10_000);
 
@@ -65,7 +73,7 @@ export function runCarryBacktest(
         cooldownUntil = t + params.minBarsBetweenTrades;
       }
     } else if (t >= cooldownUntil && fBps >= params.enterFundingBps) {
-      notionalCents = Math.round(params.capitalFraction * cash);
+      notionalCents = Math.round(CAPITAL_FRACTION * cash);
       const entryFee = feeCents(notionalCents, ENTRY_FEE_BPS);
       feesPaidCents += entryFee;
       cash -= entryFee;

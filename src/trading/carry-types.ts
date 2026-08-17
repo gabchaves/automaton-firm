@@ -6,10 +6,13 @@ export interface CarryBar {
 }
 
 export interface CarryParams {
+  // Timing-only search space: the CEO evolves WHEN to be in the carry, never HOW
+  // MUCH. Size (capitalFraction) is a fixed engine constant so a rising lineage
+  // reflects timing skill, not leverage. Size returns as a tunable in v2 once
+  // basis risk is modeled and the score can penalize it.
   enterFundingBps: number;      // enter when funding (bps/8h) >= this
   exitFundingBps: number;       // exit when funding <= this (enter > exit => hysteresis)
   maxHoldBars: number;          // hard cap on funding intervals held
-  capitalFraction: number;      // 0..1 of equity deployed as notional
   minBarsBetweenTrades: number; // cooldown bars between cycles
 }
 

@@ -1,8 +1,17 @@
 # Funding-Carry Evolution — Design Spec
 
 **Date:** 2026-08-17
-**Status:** Approved design, pending implementation plan
+**Status:** Implemented; one post-review correction applied (see below)
 **Extends:** `docs/superpowers/specs/2026-08-16-trading-firm-phase-1-design.md`
+
+> **Post-review correction (2026-08-17):** `capitalFraction` was removed from
+> `CarryParams` and is now a fixed engine constant (`CAPITAL_FRACTION = 0.5`).
+> Rationale: the comparator scores absolute net (`realizedPnl − maxDrawdown`),
+> which scales linearly with position size, so a CEO-tunable size would let the
+> evolution "win" by leverage rather than timing skill — and v1 drawdown ignores
+> basis risk, so bigger size would not even be penalized. Pinning size makes a
+> rising lineage reflect timing skill (the user's actual goal). Size returns as a
+> tunable in v2 once basis risk is modeled and the score can penalize it.
 
 ## 1. Purpose
 
@@ -95,11 +104,10 @@ entry/exit is a v2 refinement.
 ### `src/trading/carry-types.ts`
 ```ts
 export interface CarryBar { time: number; spotCents: number; markCents: number; fundingRate: number; } // fundingRate as a fraction per 8h, e.g. 0.0001 = 1bp
-export interface CarryParams {
+export interface CarryParams { // timing-only: size is a fixed engine constant (see correction note)
   enterFundingBps: number;      // enter when funding (bps/8h) >= this
   exitFundingBps: number;       // exit when funding <= this (hysteresis: enter > exit)
   maxHoldBars: number;          // max funding intervals held per cycle
-  capitalFraction: number;      // 0..1 of equity deployed as notional
   minBarsBetweenTrades: number; // cooldown to prevent churn
 }
 export interface CarryCycle { openTime: number; closeTime: number; barsHeld: number; fundingCents: number; feesCents: number; netCents: number; }

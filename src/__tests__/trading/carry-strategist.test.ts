@@ -19,7 +19,7 @@ const stub = (content: string): WorkerInferenceClient =>
 describe("formulateCarryStrategy", () => {
   it("parses CEO JSON into params + rationale and persists the skill", async () => {
     const home = fs.mkdtempSync(path.join(os.tmpdir(), "carry-ceo-"));
-    const inference = stub('```json\n{"enterFundingBps":3,"exitFundingBps":0,"maxHoldBars":60,"capitalFraction":0.4,"minBarsBetweenTrades":5,"rationale":"Raise the entry threshold to skip low-funding churn."}\n```');
+    const inference = stub('```json\n{"enterFundingBps":3,"exitFundingBps":0,"maxHoldBars":60,"minBarsBetweenTrades":5,"rationale":"Raise the entry threshold to skip low-funding churn."}\n```');
     const draft = await formulateCarryStrategy({ inference, generation: 1, priorParams: DEFAULT_CARRY_PARAMS, priorResult, homeDir: home });
     expect(draft.name).toBe("carry-gen1");
     expect(draft.params.enterFundingBps).toBe(3);

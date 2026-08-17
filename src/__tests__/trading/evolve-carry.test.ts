@@ -9,11 +9,13 @@ import type { WorkerInferenceClient } from "../../agent/harness-types.js";
 const positiveBars = (n: number): CarryBar[] =>
   Array.from({ length: n }, (_, i) => ({ time: i * 8 * 3600 * 1000, spotCents: 5_000_000, markCents: 5_000_000, fundingRate: 0.0002 }));
 
-// CEO stub returns a full-notional candidate; on persistently positive funding it
-// collects ~2x the default incumbent's net (capitalFraction 0.5) over the same window.
+// Size is fixed by the engine, so the candidate can only win on TIMING: holding
+// through the whole positive-funding window (maxHoldBars 999, no cooldown) beats
+// the default incumbent (maxHoldBars 90 + cooldown 3), which needlessly exits and
+// re-enters, paying an extra fee round-trip on the same window.
 const stubInference = {
   chat: async () => ({
-    content: JSON.stringify({ enterFundingBps: 1, exitFundingBps: 0, maxHoldBars: 999, capitalFraction: 1, minBarsBetweenTrades: 0, rationale: "Deploy full notional; funding is persistently positive." }),
+    content: JSON.stringify({ enterFundingBps: 1, exitFundingBps: 0, maxHoldBars: 999, minBarsBetweenTrades: 0, rationale: "Hold through the whole positive-funding window instead of churning." }),
   }),
 } as unknown as WorkerInferenceClient;
 
@@ -35,6 +37,6 @@ describe("evolveCarryGenerations", () => {
     expect(calls).toEqual([1]);
     expect(records[0].keptAsIncumbent).toBe(true);
     expect(records[0].evalResult.realizedPnlCents).toBeGreaterThan(0);
-    expect(records[0].rationale).toContain("notional");
+    expect(records[0].rationale).toContain("Hold through");
   });
 });
