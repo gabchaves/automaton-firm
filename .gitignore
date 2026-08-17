@@ -12,19 +12,13 @@ dist
 .automaton/state.db
 
 
-# generated dashboard snapshot
-firm-dashboard.html
-firm-live-run.log
-firm-live.db
-evolution.txt
+# Generated reports & run artifacts (dashboards write here; see scripts/*-dashboard.mjs)
+reports/
+
+# Lineage/stats sidecars written next to the runs
 evolution-lineage.jsonl
-evolution-lineage.html
 carry-lineage.jsonl
-carry-lineage.html
-carry-firm.db
-carry-firm.html
 carry-firm-stats.json
-walkforward.html
 walkforward.json
 
 

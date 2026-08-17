@@ -55,7 +55,8 @@ function main() {
       journals: readJournals(defaultJournalsPath()),
     };
     const html = renderDashboardHtml(data, new Date().toISOString());
-    const outPath = path.resolve(process.cwd(), "firm-dashboard.html");
+    const outPath = path.resolve(process.cwd(), "reports", "firm-dashboard.html");
+    fs.mkdirSync(path.dirname(outPath), { recursive: true });
     fs.writeFileSync(outPath, html, "utf8");
     console.log(outPath);
   } finally {

@@ -5,7 +5,8 @@ import path from "node:path";
 import { renderLineageHTML } from "./lineage-render.mjs";
 
 const jsonlPath = process.argv[2] || path.join(os.homedir(), ".automaton", "carry-lineage.jsonl");
-const outPath = process.argv[3] || path.resolve(process.cwd(), "carry-lineage.html");
+const outPath = process.argv[3] || path.resolve(process.cwd(), "reports", "carry-lineage.html");
+fs.mkdirSync(path.dirname(outPath), { recursive: true });
 
 const records = [];
 if (fs.existsSync(jsonlPath)) {

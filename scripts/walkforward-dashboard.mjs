@@ -62,7 +62,8 @@ export function renderWalkForwardHTML(summary, results, generatedAt) {
 
 function main() {
   const jsonPath = process.argv[2] || path.join(os.homedir(), ".automaton", "walkforward.json");
-  const outPath = process.argv[3] || path.resolve(process.cwd(), "walkforward.html");
+  const outPath = process.argv[3] || path.resolve(process.cwd(), "reports", "walkforward.html");
+  fs.mkdirSync(path.dirname(outPath), { recursive: true });
 
   if (!fs.existsSync(jsonPath)) {
     console.log(`Walkforward dashboard: json not found at ${jsonPath}. Run the walkforward runner first.`);

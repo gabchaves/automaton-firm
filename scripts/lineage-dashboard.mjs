@@ -13,7 +13,8 @@ import os from "node:os";
 import path from "node:path";
 
 const jsonlPath = process.argv[2] || path.join(os.homedir(), ".automaton", "evolution-lineage.jsonl");
-const outPath = process.argv[3] || path.resolve(process.cwd(), "evolution-lineage.html");
+const outPath = process.argv[3] || path.resolve(process.cwd(), "reports", "evolution-lineage.html");
+fs.mkdirSync(path.dirname(outPath), { recursive: true });
 
 function esc(s) {
   return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");

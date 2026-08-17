@@ -85,7 +85,8 @@ export function renderFirmRosterHTML(traders, statsById, generatedAt) {
 function main() {
   const dbPath = process.argv[2] || path.join(os.homedir(), ".automaton", "carry-firm.db");
   const statsPath = process.argv[3] || path.join(os.homedir(), ".automaton", "carry-firm-stats.json");
-  const outPath = process.argv[4] || path.resolve(process.cwd(), "carry-firm.html");
+  const outPath = process.argv[4] || path.resolve(process.cwd(), "reports", "carry-firm.html");
+  fs.mkdirSync(path.dirname(outPath), { recursive: true });
 
   if (!fs.existsSync(dbPath)) {
     console.log(`Carry firm dashboard: db not found at ${dbPath}. Run the firm first.`);
