@@ -3,8 +3,15 @@ import type { AutomatonTool, ToolContext } from "../types.js";
 import type { PriceFeed } from "./feed.js";
 import type { PaperSimulator } from "./simulator.js";
 import type { OrderSide, TraderRow } from "./types.js";
-import { loadBook, getTrader, updateTraderBalance, insertTrader } from "./repo.js";
+import { loadBook, getTrader, updateTraderBalance, insertTrader, listTraders } from "./repo.js";
 import { renderJournal, journalPath } from "./journal.js";
+
+// Intern-hiring risk limits, enforced from ground truth (the DB book),
+// never from agent-supplied args. Mirror spec §9.
+const INTERN_HIRE_THRESHOLD_CENTS = 1000; // $10 — senior must reach this to hire
+const INTERN_STAKE_MIN_CENTS = 200; //       $2 minimum stake
+const LEADER_MIN_RETAIN_CENTS = 300; //      $3 the leader must retain post-stake
+const MAX_INTERNS_PER_SENIOR = 1; //         cap on concurrent live interns
 
 export function createTradingTools(
   sim: PaperSimulator,
@@ -195,7 +202,6 @@ export function createTradingTools(
           name: { type: "string", description: "Name of new intern" },
           stakeCents: { type: "number", description: "Capital staked from senior's book" },
           strategySkill: { type: "string", description: "Path to inherited strategy SKILL.md" },
-          leaderBalanceCents: { type: "number", description: "Current senior balance (for policy check)" },
         },
         required: ["traderId", "name", "stakeCents"],
       },
@@ -209,8 +215,27 @@ export function createTradingTools(
         if (!leader || leader.status !== "live") {
           return `Error: Senior trader ${traderId} is not live.`;
         }
-        if (leader.bookBalanceCents < stakeCents) {
-          return `Error: Insufficient balance. Senior has ${leader.bookBalanceCents} cents, tried to stake ${stakeCents}.`;
+        if (leader.role !== "senior") {
+          return `Error: Only senior traders can hire interns (${traderId} is ${leader.role}).`;
+        }
+        if (!Number.isFinite(stakeCents) || stakeCents <= 0) {
+          return `Error: stakeCents must be a positive number.`;
+        }
+        // Ground-truth risk enforcement — balance from the book, never from args.
+        if (leader.bookBalanceCents < INTERN_HIRE_THRESHOLD_CENTS) {
+          return `Error: Balance ${leader.bookBalanceCents}c below hire threshold ${INTERN_HIRE_THRESHOLD_CENTS}c.`;
+        }
+        if (stakeCents < INTERN_STAKE_MIN_CENTS) {
+          return `Error: Stake ${stakeCents}c below minimum ${INTERN_STAKE_MIN_CENTS}c.`;
+        }
+        if (leader.bookBalanceCents - stakeCents < LEADER_MIN_RETAIN_CENTS) {
+          return `Error: Leader would retain ${leader.bookBalanceCents - stakeCents}c, below floor ${LEADER_MIN_RETAIN_CENTS}c.`;
+        }
+        const liveInterns = listTraders(ctx.db.raw, "live").filter(
+          (t) => t.role === "intern" && t.parentId === traderId,
+        );
+        if (liveInterns.length >= MAX_INTERNS_PER_SENIOR) {
+          return `Error: Senior ${traderId} already has ${liveInterns.length} live intern(s); cap is ${MAX_INTERNS_PER_SENIOR}.`;
         }
 
         const internId = ulid();
