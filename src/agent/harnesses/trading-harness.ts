@@ -80,8 +80,8 @@ the specific price condition that would make you trade next.
 
 ## Workflow
 1. get_book — know your cash and open positions.
-2. get_candles + get_price — read the market on BTCUSDT.
-3. Form a one-sentence thesis (direction + why).
+2. get_signals + get_candles + get_price — read quantitative indicators and price action on BTCUSDT.
+3. Form a one-sentence thesis citing specific indicator values (direction + why).
 4. Act: place_order or close_position, sized within your book. Oversized
    orders are rejected by the system — size conservatively.
 5. write_journal after any closed trade (thesis, outcome, mistake).
