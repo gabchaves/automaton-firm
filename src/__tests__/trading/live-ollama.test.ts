@@ -81,5 +81,5 @@ describe.skipIf(!LIVE)("LIVE firm tick (Ollama + real Binance)", () => {
     expect(results[0].traderId).toBe("t1");
 
     appDb.close();
-  }, 180_000);
+  }, 600_000);
 });
