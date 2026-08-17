@@ -15,6 +15,8 @@ export interface WindowBaseline {
   medianCents: number;
   p90Cents: number;
   samples: number;
+  doNothingCents: number; // ALWAYS 0 — the net of never trading, stated explicitly
+  benchmarkCents: number; // max(medianCents, doNothingCents) — what HR must be beaten by
 }
 
 const DEFAULT_SAMPLES = 25;
@@ -60,9 +62,14 @@ export function computeWindowBaseline(deps: {
     nets.push(result.finalEquityCents - startCents);
   }
 
+  const medianCents = median(nets);
+  const doNothingCents = 0; // never trading realizes nothing, by construction
+
   return {
-    medianCents: median(nets),
+    medianCents,
     p90Cents: percentile(nets, 90),
     samples,
+    doNothingCents,
+    benchmarkCents: Math.max(medianCents, doNothingCents),
   };
 }

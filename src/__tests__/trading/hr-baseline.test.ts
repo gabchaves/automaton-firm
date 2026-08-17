@@ -30,4 +30,18 @@ describe("computeWindowBaseline", () => {
     const baseline = computeWindowBaseline({ prices: volatilePrices, startCents: 100_000, seed: 3 });
     expect(baseline.samples).toBe(25);
   });
+
+  it("reports doing nothing as a zero-net benchmark", () => {
+    const b = computeWindowBaseline({ prices: [100_000, 101_000, 99_000, 100_500], startCents: 300, seed: 5 });
+    expect(b.doNothingCents).toBe(0);
+  });
+
+  it("benchmark is the better of random and doing nothing", () => {
+    // On a flat series random only pays fees => negative median => benchmark must be 0, not negative.
+    const flat = Array.from({ length: 120 }, () => 100_000);
+    const b = computeWindowBaseline({ prices: flat, startCents: 300, seed: 5 });
+    expect(b.medianCents).toBeLessThanOrEqual(0);
+    expect(b.benchmarkCents).toBe(0);
+    expect(b.benchmarkCents).toBeGreaterThanOrEqual(b.medianCents);
+  });
 });
