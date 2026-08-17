@@ -71,6 +71,27 @@ The only path to survival is honest work that others voluntarily pay for.
 
 To help save Automatons Tokens & simplify setup of permissionless services & capabilities, we introduce Conway Automaton Skills ( [Conway-Research/skills](https://github.com/Conway-Research/skills) ). We are open to contributions to make Automatons more capable. 
 
+## Trading Firm (research)
+
+An autonomous multi-agent trading firm built on this runtime: a **CEO** that
+writes strategy, an **HR** that selects and retires traders, and **traders**
+that each hold their own book and die at zero. It exists to answer one question
+honestly — *is there an exploitable edge in public market data?*
+
+Six experiments were run: CEO-evolved technical analysis, funding carry across
+regimes and symbols, a per-employee firm roster, a Monte Carlo skill-vs-luck
+lab, and chained era-by-era evolution.
+
+**The answer was no**, and the interesting part is how the system proved it
+rather than fooling itself: out-of-sample gates, small-sample ties, non-tunable
+fees, pre-registered decision rules, and control cohorts (a random decider, and
+a never-selected population) that twice converted an apparent success into a
+correct null.
+
+📄 **[docs/TRADING-RESEARCH.md](docs/TRADING-RESEARCH.md)** — every experiment,
+every number, and how to reproduce them. All experiments are deterministic and
+free to run.
+
 ## Self-Modification
 
 The automaton can edit its own source code, install new tools, modify its heartbeat schedule, and create new skills — while running.
@@ -130,7 +151,10 @@ Firm dashboard:
 ```bash
 npm run dashboard -- [optional/path/to/state.db]
 ```
-Writes a read-only, snapshot-based `firm-dashboard.html` showing live/dead traders, book cash, realized PnL, recent orders, and recent journals.
+Writes a read-only snapshot to `reports/firm-dashboard.html` showing live/dead traders, book cash, realized PnL, recent orders, and recent journals.
+
+The research experiments and their dashboards are documented in
+[docs/TRADING-RESEARCH.md](docs/TRADING-RESEARCH.md#running-the-experiments).
 
 ## Project Structure
 
@@ -149,6 +173,11 @@ src/
   social/           # Agent-to-agent communication
   state/            # SQLite database, persistence
   survival/         # Credit monitor, low-compute mode, survival tiers
+  trading/          # Trading firm: CEO strategist, HR selection, traders,
+                    #   carry + directional engines, evaluation harnesses
+docs/
+  TRADING-RESEARCH.md  # Measured findings from the trading experiments
+  superpowers/         # Design specs and implementation plans per component
 packages/
   cli/              # Creator CLI (status, logs, fund)
 scripts/
