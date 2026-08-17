@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { fetchCarrySeries } from "../../trading/funding-feed.js";
+import { fetchCarrySeries, fetchCarrySeriesRange } from "../../trading/funding-feed.js";
 
 const H = 8 * 3600 * 1000;
 const fundingPayload = [
@@ -32,5 +32,40 @@ describe("fetchCarrySeries", () => {
   it("rejects a malformed funding payload", async () => {
     const bad = (async () => ({ ok: true, json: async () => [{ nope: 1 }] } as Response)) as unknown as typeof fetch;
     await expect(fetchCarrySeries("BTCUSDT", 1, bad)).rejects.toThrow();
+  });
+});
+
+describe("fetchCarrySeriesRange", () => {
+  const S = 1_600_000_000_000;
+  const E = S + 2000 * H;
+
+  it("pages funding by time and aligns to spot", async () => {
+    let fundingCalls = 0;
+    const stub = (async (url: string | URL) => {
+      const u = String(url);
+      if (u.includes("fundingRate")) {
+        fundingCalls++;
+        if (fundingCalls === 1) {
+          const page = Array.from({ length: 1000 }, (_, i) => ({ symbol: "BTCUSDT", fundingTime: S + i * H, fundingRate: "0.00010000" }));
+          return { ok: true, json: async () => page } as Response;
+        }
+        const page = Array.from({ length: 3 }, (_, i) => ({ symbol: "BTCUSDT", fundingTime: S + (1000 + i) * H, fundingRate: "0.00020000" }));
+        return { ok: true, json: async () => page } as Response;
+      }
+      if (u.includes("klines")) {
+        const page = [
+          [S, "50000.00", "1", "1", "50000.00", "1", 0],
+          [S + 1000 * H, "51000.00", "1", "1", "51000.00", "1", 0],
+        ];
+        return { ok: true, json: async () => page } as Response;
+      }
+      throw new Error(`unexpected ${u}`);
+    }) as unknown as typeof fetch;
+
+    const bars = await fetchCarrySeriesRange("BTCUSDT", S, E, stub);
+    expect(bars.length).toBe(1003);
+    expect(fundingCalls).toBe(2); // paged past the first 1000
+    expect(bars[0].fundingRate).toBeCloseTo(0.0001);
+    expect(bars[1002].fundingRate).toBeCloseTo(0.0002);
   });
 });
