@@ -18,6 +18,9 @@ import {
   noToolResponse,
 } from "./mocks.js";
 import type { AutomatonDatabase, AgentTurn, AgentState } from "../types.js";
+import { PolicyEngine } from "../agent/policy-engine.js";
+import { SpendTracker } from "../agent/spend-tracker.js";
+import { createDefaultRules } from "../agent/policy-rules/index.js";
 
 describe("Agent Loop", () => {
   let db: AutomatonDatabase;
@@ -53,6 +56,8 @@ describe("Agent Loop", () => {
       db,
       conway,
       inference,
+      policyEngine: new PolicyEngine(db.raw, createDefaultRules()),
+      spendTracker: new SpendTracker(db.raw),
       onTurnComplete: (turn) => turns.push(turn),
     });
 
@@ -86,16 +91,21 @@ describe("Agent Loop", () => {
       db,
       conway,
       inference,
+      policyEngine: new PolicyEngine(db.raw, createDefaultRules()),
+      spendTracker: new SpendTracker(db.raw),
       onTurnComplete: (turn) => turns.push(turn),
     });
 
-    // The tool result should contain a blocked message, not an error
+    // The forbidden command must be blocked before reaching the sandbox.
+    // With the policy engine active, the denial surfaces via the tool-call
+    // error; the internal defense-in-depth guard yields a "Blocked" result.
+    // Accept either — the security property is that conway.exec never runs.
     const execTurn = turns.find((t) =>
       t.toolCalls.some((tc) => tc.name === "exec"),
     );
     expect(execTurn).toBeDefined();
     const execCall = execTurn!.toolCalls.find((tc) => tc.name === "exec");
-    expect(execCall!.result).toContain("Blocked");
+    expect(execCall!.error ?? execCall!.result).toMatch(/blocked|denied|forbidden/i);
 
     // conway.exec should NOT have been called
     expect(conway.execCalls.length).toBe(0);
