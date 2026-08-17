@@ -179,14 +179,17 @@ export type Gene =
 - **Carry family is deferred to v1.1** (needs the funding leg; the genome type is
   designed so adding a family is additive).
 
-### Engine step extraction (prerequisite)
+### Engine step engine (prerequisite)
 
 `runDirectional` in `src/trading/directional-engine.ts` processes a whole series;
-the Motor advances **one bar at a time with persistent state**. Extract
-`initDirectionalState()` / `stepDirectional(state, bar, params, ctx)` following
-the proven `stepCarry` extraction pattern, with books in **millicents**;
-`runDirectional` is reimplemented over the step function (converting cents ↔
-millicents at its boundary) and its existing tests are the behavior gate.
+the Motor advances **one bar at a time with persistent state**. A new module
+`src/trading/directional-step.ts` provides `initDirectionalStepState()` /
+`stepDirectional(state, priceCents, wantLong, params)` / `forceClose(...)` with
+books in **millicents**. `runDirectional` itself stays untouched: it is the HR
+baseline engine and the resilience lab's exact-value anchor, and reimplementing
+it over a millicent step function would shift rounding and break that behavior
+gate. The step module mirrors its semantics (open on wantLong, liquidation at
+equity ≤ 0, exit fee on close) and is tested independently.
 
 ## 9. Persistence (`~/.automaton/motor.db`)
 
@@ -195,12 +198,17 @@ Same SQLite driver/pattern as `src/state/database.ts`, Motor-specific schema in
 
 - `meta(key, value)` — schemaVersion, motor identity.
 - `cursor(symbol, lastClosedBarTs)`.
+- `bars(symbol, ts, closeCents)` — closed 5m bars, kept forever (~105k
+  rows/year/symbol): deciders need lookback history across restarts and the
+  catch-up equivalence test needs the exact series.
 - `generations(id, cohort, genNumber, startedAt, endedAt, peakEquityMc, peakAt, barsLived, seedNote)` — cohort ∈ {evolved, random}.
 - `traders(id, generationId, slot, name, genomeJson, bookMc, peakBookMc, realizedPnlMc, tradesCount, status, bornAt, diedAt)` — status ∈ {live, dead, fired}.
 - `events(id, ts, type, traderId, generationId, payloadJson)` — **append-only**;
   the Palco contract.
 - `equity_snapshots(ts, cohort, equityMc)` — one row per processed bar per cohort
   (~105k rows/year/cohort; trivial).
+- `trader_snapshots(ts, traderId, equityMc)` — per-trader equity per bar; HR
+  needs each trader's equity at the review window's start.
 
 **One transaction per bar:** trader steps, snapshots, events, and cursor advance
 commit atomically. A crash mid-bar re-processes that bar cleanly on restart
