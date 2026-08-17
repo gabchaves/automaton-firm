@@ -122,7 +122,14 @@ describe("evolveGenerations", () => {
       homeDir: dir,
     });
 
-    // Eval bought @ 70k, final price 72k on 0.001 BTC -> equity reflects 72k
+    // Prove evaluation used the eval window (~$70k), NOT the train window (~$50k):
+    // the eval trader's actual fill price must be in the eval range. If evolve
+    // ever evaluated on trainCandles by mistake, this order would be ~$50k.
+    const evalOrder = db.raw
+      .prepare("SELECT price_cents FROM orders WHERE trader_id LIKE 'eval-%' ORDER BY created_at LIMIT 1")
+      .get() as { price_cents: number } | undefined;
+    expect(evalOrder).toBeDefined();
+    expect(evalOrder!.price_cents).toBeGreaterThan(6_500_000); // eval (~$70k), not train (~$50k)
     expect(records[0].evalResult.ticks).toBeGreaterThan(0);
     db.close();
   });
