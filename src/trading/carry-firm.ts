@@ -5,7 +5,7 @@ import type { AutomatonDatabase } from "../types.js";
 import type { TraderRow } from "./types.js";
 import type { CarryBar, CarryParams } from "./carry-types.js";
 import { initCarryState, stepCarry, closeCarryPosition, type CarryState } from "./carry-engine.js";
-import { CARRY_ARCHETYPES, internParamsFrom } from "./carry-archetypes.js";
+import { type CarryArchetype, CARRY_ARCHETYPES, internParamsFrom } from "./carry-archetypes.js";
 import { insertTrader, listTraders, updateTraderBalance, addRealizedPnl } from "./repo.js";
 import { deathSweep } from "./firm.js";
 
@@ -37,6 +37,7 @@ export function runCarryFirm(deps: {
   hireProfitCents?: number;
   internStakeCents?: number;
   retainFloorCents?: number;
+  archetypes?: CarryArchetype[];
   homeDir?: string;
   mkId?: () => string;
 }): CarryFirmResult {
@@ -47,13 +48,14 @@ export function runCarryFirm(deps: {
   const retainFloor = deps.retainFloorCents ?? 300;
   const mkId = deps.mkId ?? (() => ulid());
   const home = deps.homeDir ?? process.env.HOME ?? process.env.USERPROFILE ?? process.cwd();
+  const archetypes = deps.archetypes && deps.archetypes.length > 0 ? deps.archetypes : CARRY_ARCHETYPES;
 
   const carry = new Map<string, LiveCarry>();
   const stats = new Map<string, CarryTraderStat>();
   let archetypeCursor = 0;
 
   const spawnSenior = (at: string): void => {
-    const arch = CARRY_ARCHETYPES[archetypeCursor++ % CARRY_ARCHETYPES.length];
+    const arch = archetypes[archetypeCursor++ % archetypes.length];
     const id = mkId();
     const row: TraderRow = {
       id,
@@ -135,7 +137,7 @@ export function runCarryFirm(deps: {
 
       const arch = senior.strategySkill ?? "moderado";
       const parentLc = carry.get(senior.id);
-      const parentParams = parentLc?.params ?? CARRY_ARCHETYPES[1].params;
+      const parentParams = parentLc?.params ?? archetypes[1]?.params ?? CARRY_ARCHETYPES[1].params;
       const internId = mkId();
       const internRow: TraderRow = {
         id: internId,
