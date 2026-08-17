@@ -13,6 +13,11 @@ export interface ProviderConfig {
   maxTokensPerMinute: number;
   priority: number;
   enabled: boolean;
+  /**
+   * Authorization header scheme. Default "Bearer" (standard OpenAI).
+   * Set "Key" for providers like fal.ai that expect `Authorization: Key <token>`.
+   */
+  authScheme?: string;
 }
 
 export interface ModelConfig {
@@ -431,9 +436,13 @@ export class ProviderRegistry {
 
   private buildResolvedModel(provider: ProviderConfig, model: ModelConfig): ResolvedModel {
     const apiKey = this.resolveApiKey(provider);
+    // Some providers (e.g. fal.ai) require `Authorization: Key <token>` rather
+    // than the OpenAI-default `Bearer <token>`. Send a custom header for those.
+    const useKeyScheme = provider.authScheme === "Key";
     const client = new OpenAI({
-      apiKey,
+      apiKey: useKeyScheme ? "not-needed" : apiKey,
       baseURL: provider.baseUrl,
+      ...(useKeyScheme ? { defaultHeaders: { Authorization: `Key ${apiKey}` } } : {}),
     });
 
     return {
@@ -547,6 +556,7 @@ function normalizeProviders(input: unknown): ProviderConfig[] {
       maxTokensPerMinute: numberOr(candidate.maxTokensPerMinute, fallback?.maxTokensPerMinute ?? 200000),
       priority: numberOr(candidate.priority, fallback?.priority ?? 100),
       enabled: booleanOr(candidate.enabled, fallback?.enabled ?? true),
+      authScheme: typeof candidate.authScheme === "string" ? candidate.authScheme : fallback?.authScheme,
     });
   }
 
