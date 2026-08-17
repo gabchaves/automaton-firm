@@ -26,6 +26,20 @@ export class TradingHarness extends BaseHarness {
   readonly id = "trader";
   readonly description = "Paper-trading agent for systematic crypto book management, trade execution, and journal logging.";
 
+  private textOnlyNudges = 0;
+
+  protected override onTextOnlyResponse(): { continue: boolean; nudge?: string } {
+    if (this.textOnlyNudges >= 2) return { continue: false }; // give up after 2 nudges; tick ends
+    this.textOnlyNudges++;
+    return {
+      continue: true,
+      nudge:
+        "You responded with analysis but took no action. You MUST call a tool now — " +
+        "place_order or close_position to trade, or task_done with an explicit HOLD " +
+        "decision and the exact price that would trigger you. Do not reply with plain text.",
+    };
+  }
+
   buildSystemPrompt(): string {
     const traderId =
       (this.task?.assignedTo as string | undefined) ??
