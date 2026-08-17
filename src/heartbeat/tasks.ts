@@ -727,24 +727,24 @@ export const BUILTIN_TASKS: Record<string, HeartbeatTaskFn> = {
         logger.info(`firm_hr deathSweep removed dead traders: ${swept.join(", ")}`);
       }
 
-      const backfilled = backfillSeniors(
-        db,
-        { seniorFloor: 3, seniorStartCents: 10_000, baseStrategySkill: "strategy-base" },
-        now,
-        () => ulid(),
-      );
-      if (backfilled.length > 0) {
-        logger.info(`firm_hr backfillSeniors hired ${backfilled.length} new senior traders`);
-      }
-
+      // Promotion BEFORE backfill: fill slots opened by death with proven
+      // interns first (meritocracy), then hire fresh seniors only for slots
+      // that remain. Backfilling first would always fill to the floor and
+      // leave runPromotion with no open slot — so promotion would never fire.
+      const firmCfg = { seniorFloor: 3, seniorStartCents: 10_000, baseStrategySkill: "strategy-base" };
       const MIN_CLOSED_TRADES_FOR_PROMOTION = 3;
       const promoted = runPromotion(
         db,
-        { seniorFloor: 3, seniorStartCents: 10_000, baseStrategySkill: "strategy-base" },
+        firmCfg,
         promotionMetric(db, MIN_CLOSED_TRADES_FOR_PROMOTION),
       );
       if (promoted) {
         logger.info(`firm_hr promoted intern ${promoted} to senior`);
+      }
+
+      const backfilled = backfillSeniors(db, firmCfg, now, () => ulid());
+      if (backfilled.length > 0) {
+        logger.info(`firm_hr backfillSeniors hired ${backfilled.length} new senior traders`);
       }
 
       return { shouldWake: false };
