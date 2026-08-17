@@ -92,6 +92,18 @@ correct null.
 every number, and how to reproduce them. All experiments are deterministic and
 free to run.
 
+### Motor: live paper-trading firm (continuous)
+
+`pnpm motor` runs the live firm: $10 generations of genome-driven traders on
+Binance 5m bars (paper money, public data, no keys), an always-on random
+cohort as the control, evidence-based HR daily, and peak-equity records per
+generation. State and the append-only event log live in `~/.automaton/motor.db`.
+The tick is idempotent and catches up after downtime — decisions are
+deterministic, so PC-off periods are backfilled exactly as they would have
+run live. `pnpm motor:status` prints a snapshot. To keep it running across
+logins on Windows, register `pnpm motor` in Task Scheduler at logon with
+"restart on failure" — correctness never depends on uptime.
+
 ## Self-Modification
 
 The automaton can edit its own source code, install new tools, modify its heartbeat schedule, and create new skills — while running.
