@@ -126,6 +126,12 @@ node packages/cli/dist/index.js logs --tail 20
 node packages/cli/dist/index.js fund 5.00
 ```
 
+Firm dashboard:
+```bash
+npm run dashboard -- [optional/path/to/state.db]
+```
+Writes a read-only, snapshot-based `firm-dashboard.html` showing live/dead traders, book cash, realized PnL, recent orders, and recent journals.
+
 ## Project Structure
 
 ```
