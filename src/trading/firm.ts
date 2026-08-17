@@ -1,6 +1,7 @@
 import type BetterSqlite3 from "better-sqlite3";
 import type { TraderRow } from "./types.js";
 import { insertTrader, listTraders, setTraderStatus } from "./repo.js";
+import type { HrAssessment } from "./hr-evaluation.js";
 
 type DatabaseType = BetterSqlite3.Database;
 
@@ -93,5 +94,41 @@ export function runPromotion(
   const best = scored[0]?.id ?? null;
   if (best) promoteTrader(db, best);
   return best;
+}
+
+/**
+ * Evidence-gated promotion (additive — does not replace `runPromotion`).
+ *
+ * Only outperformers (judged against a random baseline on the same window,
+ * see `./hr-evaluation.js`) are eligible for the open senior seat.
+ * `insufficient_evidence` interns are surfaced via `skippedForEvidence` so
+ * HR waiting for more evidence is observable, not silent — they are never
+ * promoted, and this function never touches their status.
+ */
+export function runEvidencePromotion(
+  db: DatabaseType,
+  cfg: FirmConfig,
+  assessments: HrAssessment[],
+): { promoted: string | null; skippedForEvidence: string[] } {
+  const liveSeniors = listTraders(db, "live").filter((t) => t.role === "senior").length;
+  if (liveSeniors >= cfg.seniorFloor) return { promoted: null, skippedForEvidence: [] }; // no open slot
+
+  const byId = new Map(assessments.map((a) => [a.traderId, a]));
+  const liveInterns = listTraders(db, "live").filter((t) => t.role === "intern");
+
+  const outperformers = liveInterns
+    .map((t) => byId.get(t.id))
+    .filter((a): a is HrAssessment => a !== undefined && a.verdict === "outperform")
+    .sort((a, b) => b.excessCents - a.excessCents);
+
+  const skippedForEvidence = liveInterns
+    .map((t) => byId.get(t.id))
+    .filter((a): a is HrAssessment => a !== undefined && a.verdict === "insufficient_evidence")
+    .map((a) => a.traderId);
+
+  const promoted = outperformers[0]?.traderId ?? null;
+  if (promoted) promoteTrader(db, promoted);
+
+  return { promoted, skippedForEvidence };
 }
 
