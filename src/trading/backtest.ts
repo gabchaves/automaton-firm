@@ -74,6 +74,7 @@ export async function runBacktest(deps: {
       inference: deps.inference,
       feed: deps.replay.feed,
       symbol,
+      traderId: deps.traderId,
     });
     ticks++;
 

@@ -43,6 +43,7 @@ export interface TraderTickDeps {
   inference: WorkerInferenceClient;
   feed: PriceFeed;
   symbol?: string;
+  traderId?: string;
   maxTurns?: number;
   workspaceRoot?: string;
 }
@@ -55,7 +56,7 @@ export interface TraderTickResult {
 }
 
 /**
- * Run one decision cycle for every live trader. A failure in one trader is
+ * Run one decision cycle for every live trader (or a specific traderId). A failure in one trader is
  * isolated — it is recorded and the tick continues with the next trader.
  */
 export async function runTraderTick(deps: TraderTickDeps): Promise<TraderTickResult[]> {
@@ -64,7 +65,9 @@ export async function runTraderTick(deps: TraderTickDeps): Promise<TraderTickRes
   const home = deps.workspaceRoot
     ?? path.join(process.env.HOME || process.env.USERPROFILE || process.cwd(), ".automaton", "workspace");
 
-  const live = listTraders(deps.db.raw, "live");
+  const live = listTraders(deps.db.raw, "live").filter(
+    (t) => !deps.traderId || t.id === deps.traderId,
+  );
   logger.info(`trader_tick driving ${live.length} live traders on ${symbol}`);
 
   // A single simulator + tool set is shared across traders in this tick;
