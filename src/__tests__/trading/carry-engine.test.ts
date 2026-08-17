@@ -3,7 +3,12 @@ import { runCarryBacktest, initCarryState, stepCarry, closeCarryPosition } from 
 import type { CarryBar, CarryParams } from "../../trading/carry-types.js";
 
 const params: CarryParams = { enterFundingBps: 1, exitFundingBps: 0, maxHoldBars: 999, minBarsBetweenTrades: 0 };
-const bar = (fundingRate: number, time = 0): CarryBar => ({ time, spotCents: 5_000_000, markCents: 5_000_000, fundingRate });
+const bar = (fundingRate: number, time = 0, spot = 5_000_000, mark = 5_000_000): CarryBar => ({
+  time,
+  spotCents: spot,
+  markCents: mark,
+  fundingRate,
+});
 
 describe("carry engine", () => {
   it("constant positive funding: net = funding - fees (exact)", () => {
@@ -18,6 +23,7 @@ describe("carry engine", () => {
     expect(r.realizedPnlCents).toBe(8_400);
     expect(r.finalEquityCents).toBe(1_008_400);
     expect(r.closedTrades).toBe(1);
+    expect(r.basisPnlCents).toBe(0);
   });
 
   it("funding below entry threshold: never enters, zero net", () => {
@@ -46,10 +52,9 @@ describe("carry engine", () => {
 
 describe("stepCarry", () => {
   const p = { enterFundingBps: 1, exitFundingBps: 0, maxHoldBars: 999, minBarsBetweenTrades: 0 };
-  const b = (rate: number, time = 0) => ({ time, spotCents: 5_000_000, markCents: 5_000_000, fundingRate: rate });
 
   it("opens on the entry bar, charging the entry fee, no funding that bar", () => {
-    const r = stepCarry(initCarryState(), b(0.0002), p, { barIndex: 0, equityCents: 1_000_000 });
+    const r = stepCarry(initCarryState(), bar(0.0002), p, { barIndex: 0, equityCents: 1_000_000 });
     expect(r.state.inPosition).toBe(true);
     expect(r.fundingCents).toBe(0);
     expect(r.feesCents).toBe(750); // round(0.5 * 1_000_000 * 15 / 10000)
@@ -57,25 +62,45 @@ describe("stepCarry", () => {
   });
 
   it("accrues funding while in position", () => {
-    const open = stepCarry(initCarryState(), b(0.0002), p, { barIndex: 0, equityCents: 1_000_000 });
-    const held = stepCarry(open.state, b(0.0002), p, { barIndex: 1, equityCents: 1_000_000 });
+    const open = stepCarry(initCarryState(), bar(0.0002), p, { barIndex: 0, equityCents: 1_000_000 });
+    const held = stepCarry(open.state, bar(0.0002), p, { barIndex: 1, equityCents: 1_000_000 });
     expect(held.fundingCents).toBe(100); // round(0.0002 * 500_000)
     expect(held.closedCycle).toBeNull();
   });
 
   it("closes when funding drops to the exit threshold, charging the exit fee", () => {
-    const open = stepCarry(initCarryState(), b(0.0002), p, { barIndex: 0, equityCents: 1_000_000 });
-    const exit = stepCarry(open.state, b(-0.0001, 8), p, { barIndex: 1, equityCents: 1_000_000 });
+    const open = stepCarry(initCarryState(), bar(0.0002), p, { barIndex: 0, equityCents: 1_000_000 });
+    const exit = stepCarry(open.state, bar(-0.0001, 8), p, { barIndex: 1, equityCents: 1_000_000 });
     expect(exit.closedCycle).not.toBeNull();
     expect(exit.feesCents).toBe(750);
     expect(exit.state.inPosition).toBe(false);
   });
 
   it("closeCarryPosition force-closes an open position with an exit fee", () => {
-    const open = stepCarry(initCarryState(), b(0.0002), p, { barIndex: 0, equityCents: 1_000_000 });
-    const c = closeCarryPosition(open.state, 99);
+    const open = stepCarry(initCarryState(), bar(0.0002), p, { barIndex: 0, equityCents: 1_000_000 });
+    const c = closeCarryPosition(open.state, bar(0.0002, 99));
     expect(c.closedCycle).not.toBeNull();
     expect(c.feesCents).toBe(750);
     expect(c.state.inPosition).toBe(false);
+  });
+});
+
+describe("basis P&L", () => {
+  const p = { enterFundingBps: 1, exitFundingBps: -99, maxHoldBars: 999, minBarsBetweenTrades: 0 };
+
+  it("widening basis while held is an unrealized loss, realized on close", () => {
+    // enter at basis 0 (mark=spot=5_000_000), qty = 0.5*1_000_000/5_000_000 = 0.1 BTC
+    const open = stepCarry(initCarryState(), bar(0.0002, 0, 5_000_000, 5_000_000), p, { barIndex: 0, equityCents: 1_000_000 });
+    // next bar: mark rises 10_000c above spot -> basisNow = 10_000, pnl = 0.1*(0 - 10_000) = -1_000
+    const held = stepCarry(open.state, bar(0.0002, 8, 5_000_000, 5_010_000), p, { barIndex: 1, equityCents: 1_000_000 });
+    expect(held.unrealizedBasisCents).toBe(-1000);
+    // force close at that basis realizes -1_000
+    const c = closeCarryPosition(held.state, bar(0, 16, 5_000_000, 5_010_000));
+    expect(c.realizedBasisCents).toBe(-1000);
+  });
+
+  it("mark==spot throughout leaves basis P&L at zero (backward compatible)", () => {
+    const r = runCarryBacktest(Array.from({ length: 50 }, (_, i) => bar(0.0002, i)), p, 1_000_000);
+    expect(r.basisPnlCents).toBe(0);
   });
 });

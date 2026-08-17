@@ -20,22 +20,48 @@ export interface CarryState {
   cycleFundingCents: number;
   cycleFeesCents: number;
   cooldownUntil: number;
+  entrySpotCents: number;
+  entryMarkCents: number;
+  qty: number;
 }
 
 export function initCarryState(): CarryState {
-  return { inPosition: false, notionalCents: 0, heldBars: 0, entryTime: 0, cycleFundingCents: 0, cycleFeesCents: 0, cooldownUntil: 0 };
+  return {
+    inPosition: false,
+    notionalCents: 0,
+    heldBars: 0,
+    entryTime: 0,
+    cycleFundingCents: 0,
+    cycleFeesCents: 0,
+    cooldownUntil: 0,
+    entrySpotCents: 0,
+    entryMarkCents: 0,
+    qty: 0,
+  };
 }
+
+const basisPnlCents = (st: CarryState, bar: CarryBar): number =>
+  Math.round(st.qty * ((st.entryMarkCents - st.entrySpotCents) - (bar.markCents - bar.spotCents)));
 
 export function stepCarry(
   state: CarryState,
   bar: CarryBar,
   params: CarryParams,
   ctx: { barIndex: number; equityCents: number },
-): { state: CarryState; fundingCents: number; feesCents: number; closedCycle: CarryCycle | null } {
+): {
+  state: CarryState;
+  fundingCents: number;
+  feesCents: number;
+  realizedBasisCents: number;
+  unrealizedBasisCents: number;
+  closedCycle: CarryCycle | null;
+} {
   const fBps = toBps(bar.fundingRate);
   const s: CarryState = { ...state };
   let fundingCents = 0;
   let feesCents = 0;
+  let realizedBasisCents = 0;
+  let unrealizedBasisCents = 0;
   let closedCycle: CarryCycle | null = null;
 
   if (s.inPosition) {
@@ -46,50 +72,78 @@ export function stepCarry(
       const exitFee = feeCents(s.notionalCents, EXIT_FEE_BPS);
       feesCents = exitFee;
       s.cycleFeesCents += exitFee;
+      realizedBasisCents = basisPnlCents(s, bar);
       closedCycle = {
         openTime: s.entryTime,
         closeTime: bar.time,
         barsHeld: s.heldBars,
         fundingCents: s.cycleFundingCents,
         feesCents: s.cycleFeesCents,
-        netCents: s.cycleFundingCents - s.cycleFeesCents,
+        basisCents: realizedBasisCents,
+        netCents: s.cycleFundingCents - s.cycleFeesCents + realizedBasisCents,
       };
       s.inPosition = false;
       s.notionalCents = 0;
       s.heldBars = 0;
       s.cycleFundingCents = 0;
       s.cycleFeesCents = 0;
+      s.entrySpotCents = 0;
+      s.entryMarkCents = 0;
+      s.qty = 0;
       s.cooldownUntil = ctx.barIndex + params.minBarsBetweenTrades;
+    } else {
+      unrealizedBasisCents = basisPnlCents(s, bar);
     }
   } else if (ctx.barIndex >= s.cooldownUntil && fBps >= params.enterFundingBps) {
     s.notionalCents = Math.round(CAPITAL_FRACTION * ctx.equityCents);
+    s.qty = bar.spotCents > 0 ? (CAPITAL_FRACTION * ctx.equityCents) / bar.spotCents : 0;
+    s.entrySpotCents = bar.spotCents;
+    s.entryMarkCents = bar.markCents;
     const entryFee = feeCents(s.notionalCents, ENTRY_FEE_BPS);
     feesCents = entryFee;
     s.cycleFeesCents += entryFee;
     s.inPosition = true;
     s.heldBars = 0;
     s.entryTime = bar.time;
+    unrealizedBasisCents = 0;
   }
 
-  return { state: s, fundingCents, feesCents, closedCycle };
+  return { state: s, fundingCents, feesCents, realizedBasisCents, unrealizedBasisCents, closedCycle };
 }
 
 export function closeCarryPosition(
   state: CarryState,
-  closeTime: number,
-): { state: CarryState; feesCents: number; closedCycle: CarryCycle | null } {
-  if (!state.inPosition) return { state, feesCents: 0, closedCycle: null };
+  bar: CarryBar,
+): {
+  state: CarryState;
+  feesCents: number;
+  realizedBasisCents: number;
+  closedCycle: CarryCycle | null;
+} {
+  if (!state.inPosition) return { state, feesCents: 0, realizedBasisCents: 0, closedCycle: null };
   const exitFee = feeCents(state.notionalCents, EXIT_FEE_BPS);
+  const realizedBasisCents = basisPnlCents(state, bar);
   const closedCycle: CarryCycle = {
     openTime: state.entryTime,
-    closeTime,
+    closeTime: bar.time,
     barsHeld: state.heldBars,
     fundingCents: state.cycleFundingCents,
     feesCents: state.cycleFeesCents + exitFee,
-    netCents: state.cycleFundingCents - (state.cycleFeesCents + exitFee),
+    basisCents: realizedBasisCents,
+    netCents: state.cycleFundingCents - (state.cycleFeesCents + exitFee) + realizedBasisCents,
   };
-  const s: CarryState = { ...state, inPosition: false, notionalCents: 0, heldBars: 0, cycleFundingCents: 0, cycleFeesCents: 0 };
-  return { state: s, feesCents: exitFee, closedCycle };
+  const s: CarryState = {
+    ...state,
+    inPosition: false,
+    notionalCents: 0,
+    heldBars: 0,
+    cycleFundingCents: 0,
+    cycleFeesCents: 0,
+    entrySpotCents: 0,
+    entryMarkCents: 0,
+    qty: 0,
+  };
+  return { state: s, feesCents: exitFee, realizedBasisCents, closedCycle };
 }
 
 export function runCarryBacktest(
@@ -101,14 +155,15 @@ export function runCarryBacktest(
   let cash = startCents;
   let fundingCollectedCents = 0;
   let feesPaidCents = 0;
+  let basisPnlCentsTotal = 0;
   const cycles: CarryCycle[] = [];
   let state = initCarryState();
   let peakEquity = startCents;
   let maxDrawdownCents = 0;
 
-  const trackDd = () => {
-    if (cash > peakEquity) peakEquity = cash;
-    const dd = peakEquity - cash;
+  const trackDd = (equity: number) => {
+    if (equity > peakEquity) peakEquity = equity;
+    const dd = peakEquity - equity;
     if (dd > maxDrawdownCents) maxDrawdownCents = dd;
   };
 
@@ -117,18 +172,21 @@ export function runCarryBacktest(
     state = r.state;
     fundingCollectedCents += r.fundingCents;
     feesPaidCents += r.feesCents;
-    cash += r.fundingCents - r.feesCents;
+    basisPnlCentsTotal += r.realizedBasisCents;
+    cash += r.fundingCents - r.feesCents + r.realizedBasisCents;
     if (r.closedCycle) cycles.push(r.closedCycle);
-    trackDd();
+    trackDd(cash + r.unrealizedBasisCents);
   }
 
   if (state.inPosition) {
-    const c = closeCarryPosition(state, bars.length ? bars[bars.length - 1].time : 0);
+    const lastBar = bars.length ? bars[bars.length - 1] : { time: 0, spotCents: 0, markCents: 0, fundingRate: 0 };
+    const c = closeCarryPosition(state, lastBar);
     state = c.state;
     feesPaidCents += c.feesCents;
-    cash -= c.feesCents;
+    basisPnlCentsTotal += c.realizedBasisCents;
+    cash = cash - c.feesCents + c.realizedBasisCents;
     if (c.closedCycle) cycles.push(c.closedCycle);
-    trackDd();
+    trackDd(cash);
   }
 
   return {
@@ -136,11 +194,12 @@ export function runCarryBacktest(
     strategySkill: meta.strategySkill ?? "carry",
     ticks: bars.length,
     finalEquityCents: cash,
-    realizedPnlCents: fundingCollectedCents - feesPaidCents,
+    realizedPnlCents: fundingCollectedCents - feesPaidCents + basisPnlCentsTotal,
     closedTrades: cycles.length,
     maxDrawdownCents,
     fundingCollectedCents,
     feesPaidCents,
+    basisPnlCents: basisPnlCentsTotal,
     cycles,
   };
 }
