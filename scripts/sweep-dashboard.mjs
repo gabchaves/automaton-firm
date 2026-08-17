@@ -72,7 +72,7 @@ export function renderSweepHTML(summaries, rows, capitalCents, generatedAt) {
         <td>${esc(r.bars)}</td>
         <td class="${pnlClass(r.totalPnlCents)}">${usd(r.totalPnlCents)}</td>
         <td class="negative">${usd(r.worstDrawdownCents)}</td>
-        <td class="${pnlClass(r.totalPnlCents)}">${r.totalPnlCents > 0 ? "✔ Lucro" : "✖ Prejuízo"}</td>
+        <td class="${pnlClass(r.totalPnlCents)}">${r.totalPnlCents > 0 ? "✔ Lucro" : r.totalPnlCents < 0 ? "✖ Prejuízo" : "— Neutro (sem trades)"}</td>
       </tr>`;
     })
     .join("\n");
