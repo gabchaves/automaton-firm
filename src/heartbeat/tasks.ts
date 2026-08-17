@@ -24,6 +24,14 @@ import { AlertEngine, createDefaultAlertRules } from "../observability/alerts.js
 import { metricsInsertSnapshot, metricsPruneOld } from "../state/database.js";
 import { deathSweep, backfillSeniors } from "../trading/firm.js";
 import { listTraders } from "../trading/repo.js";
+import { runTraderTick } from "../trading/tick-runner.js";
+import { createBinanceFeed } from "../trading/feed.js";
+import { ProviderRegistry } from "../inference/provider-registry.js";
+import { UnifiedInferenceClient } from "../inference/inference-client.js";
+import { createWorkerInferenceBridge } from "../agent/worker-inference-bridge.js";
+import type { AutomatonConfig } from "../types.js";
+import type { WorkerInferenceClient } from "../agent/harness-types.js";
+import path from "node:path";
 import { ulid } from "ulid";
 
 const logger = createLogger("heartbeat.tasks");
@@ -737,9 +745,24 @@ export const BUILTIN_TASKS: Record<string, HeartbeatTaskFn> = {
 
   trader_tick: async (_ctx: TickContext, taskCtx: HeartbeatLegacyContext) => {
     try {
-      const db = taskCtx.db.raw;
-      const liveTraders = listTraders(db, "live");
-      logger.info(`trader_tick active for ${liveTraders.length} live traders`);
+      const liveTraders = listTraders(taskCtx.db.raw, "live");
+      if (liveTraders.length === 0) {
+        return { shouldWake: false };
+      }
+
+      const inference = buildTraderInference(taskCtx.config);
+      const feed = createBinanceFeed();
+      const results = await runTraderTick({
+        db: taskCtx.db,
+        conway: taskCtx.conway,
+        config: taskCtx.config,
+        identity: taskCtx.identity,
+        inference,
+        feed,
+      });
+
+      const acted = results.filter((r) => r.ok).length;
+      logger.info(`trader_tick completed: ${acted}/${results.length} traders acted`);
       return { shouldWake: false };
     } catch (error) {
       logger.error("trader_tick failed", error instanceof Error ? error : undefined);
@@ -747,6 +770,34 @@ export const BUILTIN_TASKS: Record<string, HeartbeatTaskFn> = {
     }
   },
 };
+
+/**
+ * Build a worker inference client for the trader tick, mirroring the loop's
+ * provider wiring: prefer configured provider keys, fall back to Conway
+ * Compute (OpenAI-compatible) when only a Conway key exists.
+ */
+function buildTraderInference(config: AutomatonConfig): WorkerInferenceClient {
+  if (config.conwayApiKey && !process.env.CONWAY_API_KEY) {
+    process.env.CONWAY_API_KEY = config.conwayApiKey;
+  }
+  if (!process.env.OPENAI_API_KEY && config.conwayApiKey) {
+    process.env.OPENAI_API_KEY = config.conwayApiKey;
+    process.env.OPENAI_BASE_URL = `${config.conwayApiUrl}/v1`;
+  }
+
+  const providersPath = path.join(
+    process.env.HOME || process.cwd(),
+    ".automaton",
+    "inference-providers.json",
+  );
+  const registry = ProviderRegistry.fromConfig(providersPath);
+  if (process.env.OPENAI_BASE_URL) {
+    registry.overrideBaseUrl("openai", process.env.OPENAI_BASE_URL);
+  }
+
+  const unified = new UnifiedInferenceClient(registry);
+  return createWorkerInferenceBridge(unified);
+}
 
 function tierToInt(tier: SurvivalTier): number {
   const map: Record<SurvivalTier, number> = {
