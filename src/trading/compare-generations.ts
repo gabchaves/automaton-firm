@@ -25,6 +25,12 @@ export function compareGenerations(
   if (scoreA > scoreB) winner = "a";
   else if (scoreB > scoreA) winner = "b";
 
+  // Small-sample guard: if either side has too few closed trades, the
+  // comparison cannot distinguish skill from luck — it is a tie regardless of
+  // the score gap (one lucky trade can dominate a tiny sample). Run a longer
+  // window rather than crown a low-sample "winner".
+  if (lowConfidence) winner = "tie";
+
   const winnerStrat = winner === "a" ? a.strategySkill : winner === "b" ? b.strategySkill : "none";
   const confidenceNote = lowConfidence
     ? ` [Low confidence: trade count below gate of ${minTrades} (${a.strategySkill}: ${a.closedTrades}, ${b.strategySkill}: ${b.closedTrades})]`

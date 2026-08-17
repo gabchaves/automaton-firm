@@ -33,5 +33,7 @@ describe("compareGenerations", () => {
     const gen1 = result("g1", "strategy-gen1", 5_000, 100, 1); // 1 trade winner (lucky)
     const verdict = compareGenerations(gen0, gen1, 3);
     expect(verdict.reason).toMatch(/low confidence|trade count|insufficient/i);
+    // The lucky 1-trade "winner" must NOT be crowned — small sample => tie.
+    expect(verdict.winner).toBe("tie");
   });
 });
