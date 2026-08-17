@@ -2,6 +2,7 @@ import type { AutomatonTool } from "../types.js";
 import { isIdleOnlyTool } from "./idle-only-tools.js";
 
 const TRADER_TOOLS = new Set([
+  "get_signals",
   "get_candles",
   "get_price",
   "get_book",

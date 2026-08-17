@@ -5,6 +5,7 @@ import type { PaperSimulator } from "./simulator.js";
 import type { OrderSide, TraderRow } from "./types.js";
 import { loadBook, getTrader, updateTraderBalance, insertTrader, listTraders } from "./repo.js";
 import { renderJournal, journalPath } from "./journal.js";
+import { computeSignals } from "./signals.js";
 
 // Intern-hiring risk limits, enforced from ground truth (the DB book),
 // never from agent-supplied args. Mirror spec §9.
@@ -18,6 +19,29 @@ export function createTradingTools(
   feed: PriceFeed,
 ): AutomatonTool[] {
   return [
+    {
+      name: "get_signals",
+      description: "Compute quantitative technical indicators (EMA20/50, RSI14, ATR14, Momentum10, VolumeRatio20, High/Low20) for a symbol.",
+      category: "financial",
+      riskLevel: "safe",
+      parameters: {
+        type: "object",
+        properties: {
+          symbol: { type: "string", description: "Trading pair symbol, e.g. BTCUSDT" },
+          interval: { type: "string", description: "Candle interval, e.g. 4h, 1h, 1d (default 4h)" },
+          limit: { type: "number", description: "Number of lookback candles to compute over (default 60)" },
+        },
+        required: ["symbol"],
+      },
+      execute: async (args) => {
+        const symbol = String(args.symbol);
+        const interval = String(args.interval || "4h");
+        const limit = Number(args.limit || 60);
+        const candles = await feed.getCandles(symbol, interval, limit);
+        const snapshot = computeSignals(symbol, candles);
+        return JSON.stringify(snapshot);
+      },
+    },
     {
       name: "get_candles",
       description: "Fetch OHLCV candles from the price feed for a trading pair.",
