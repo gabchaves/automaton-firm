@@ -43,3 +43,12 @@ export function markToMarketCents(book: Book, priceBySymbol: Record<string, numb
   }, 0);
   return book.balanceCents + posValue;
 }
+
+export function realizedPnlForSell(book: Book, fill: Fill): number {
+  if (fill.side !== "sell") return 0;
+  const pos = book.positions.find((p) => p.symbol === fill.symbol);
+  if (!pos) return 0;
+  const qty = Math.min(fill.qty, pos.qty);
+  return Math.round(qty * (fill.priceCents - pos.avgEntryCents));
+}
+

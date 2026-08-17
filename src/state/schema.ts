@@ -5,7 +5,7 @@
  * The database IS the automaton's memory.
  */
 
-export const SCHEMA_VERSION = 12;
+export const SCHEMA_VERSION = 13;
 
 export const CREATE_TABLES = `
   -- Schema version tracking
@@ -732,3 +732,10 @@ export const MIGRATION_V12 = `
   CREATE INDEX IF NOT EXISTS idx_positions_trader ON positions(trader_id);
   CREATE INDEX IF NOT EXISTS idx_traders_status ON traders(status);
 `;
+
+export const MIGRATION_V13 = `
+  -- Schema version: 13
+  -- Track cumulative realized PnL per trader for HR evaluation
+  ALTER TABLE traders ADD COLUMN realized_pnl_cents INTEGER NOT NULL DEFAULT 0;
+`;
+

@@ -250,6 +250,7 @@ export function createTradingTools(
           strategySkill,
           bornAt: new Date().toISOString(),
           diedAt: null,
+          realizedPnlCents: 0,
         };
 
         const tx = ctx.db.raw.transaction(() => {

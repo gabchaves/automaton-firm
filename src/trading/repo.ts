@@ -6,8 +6,8 @@ type DatabaseType = BetterSqlite3.Database;
 
 export function insertTrader(db: DatabaseType, t: TraderRow): void {
   db.prepare(
-    `INSERT INTO traders (id, name, role, parent_id, book_balance_cents, status, generation, strategy_skill, born_at, died_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO traders (id, name, role, parent_id, book_balance_cents, status, generation, strategy_skill, born_at, died_at, realized_pnl_cents)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     t.id,
     t.name,
@@ -19,6 +19,7 @@ export function insertTrader(db: DatabaseType, t: TraderRow): void {
     t.strategySkill,
     t.bornAt,
     t.diedAt,
+    t.realizedPnlCents ?? 0,
   );
 }
 
@@ -153,6 +154,13 @@ export function syncPositions(
   }
 }
 
+export function addRealizedPnl(db: DatabaseType, traderId: string, cents: number): void {
+  db.prepare("UPDATE traders SET realized_pnl_cents = realized_pnl_cents + ? WHERE id = ?").run(
+    cents,
+    traderId,
+  );
+}
+
 function deserializeTraderRow(row: any): TraderRow {
   return {
     id: row.id,
@@ -165,5 +173,6 @@ function deserializeTraderRow(row: any): TraderRow {
     strategySkill: row.strategy_skill ?? null,
     bornAt: row.born_at,
     diedAt: row.died_at ?? null,
+    realizedPnlCents: row.realized_pnl_cents ?? 0,
   };
 }

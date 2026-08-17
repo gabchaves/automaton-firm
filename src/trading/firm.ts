@@ -47,6 +47,7 @@ export function backfillSeniors(
       strategySkill: cfg.baseStrategySkill,
       bornAt: at,
       diedAt: null,
+      realizedPnlCents: 0,
     };
     insertTrader(db, newSenior);
     added.push(newSenior);

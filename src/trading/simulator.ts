@@ -2,8 +2,16 @@ import type BetterSqlite3 from "better-sqlite3";
 import { ulid } from "ulid";
 import type { PriceFeed } from "./feed.js";
 import type { OrderSide } from "./types.js";
-import { applyFill, markToMarketCents } from "./book.js";
-import { loadBook, getTrader, updateTraderBalance, recordOrder, recordFill, syncPositions } from "./repo.js";
+import { applyFill, markToMarketCents, realizedPnlForSell } from "./book.js";
+import {
+  loadBook,
+  getTrader,
+  updateTraderBalance,
+  recordOrder,
+  recordFill,
+  syncPositions,
+  addRealizedPnl,
+} from "./repo.js";
 
 type DatabaseType = BetterSqlite3.Database;
 
@@ -26,6 +34,7 @@ export class PaperSimulator {
     const priceCents = await this.feed.getPrice(symbol);
     const book = loadBook(this.db, traderId);
     try {
+      const realized = realizedPnlForSell(book, { symbol, side, qty, priceCents });
       const next = applyFill(book, { symbol, side, qty, priceCents });
       const orderId = ulid();
       const tx = this.db.transaction(() => {
@@ -46,6 +55,9 @@ export class PaperSimulator {
         });
         updateTraderBalance(this.db, traderId, next.balanceCents);
         syncPositions(this.db, traderId, next.positions);
+        if (realized !== 0) {
+          addRealizedPnl(this.db, traderId, realized);
+        }
       });
       tx();
       return { ok: true, priceCents };

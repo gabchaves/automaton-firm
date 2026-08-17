@@ -51,4 +51,5 @@ export interface TraderRow {
   strategySkill: string | null;
   bornAt: string;
   diedAt: string | null;
+  realizedPnlCents: number;
 }
