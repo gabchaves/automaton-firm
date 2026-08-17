@@ -4,7 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { renderLineageBody, STYLE } from "./lineage-render.mjs";
+import { renderLineageBody, STYLE, esc } from "./lineage-render.mjs";
 
 export function readRecords(jsonlPath) {
   if (!fs.existsSync(jsonlPath)) return [];
@@ -28,11 +28,17 @@ export function sseFrame(records) {
 
 function page(jsonlPath) {
   return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1"><title>Linhagem de Carry (ao vivo)</title>
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Funding-Carry — ao vivo</title>
 <style>${STYLE}</style></head><body>
-<h1>🧬 Linhagem de Funding-Carry — ao vivo</h1>
-<p class="sub">Atualiza sozinho a cada geração · fonte: <code>${path.basename(jsonlPath)}</code></p>
-<div id="root"><p class="empty">Aguardando primeira geração…</p></div>
+<main>
+  <header>
+    <div>
+      <h1>🧬 Linhagem de Funding-Carry — ao vivo</h1>
+      <div class="stamp">Atualiza sozinho a cada geração · fonte: <code>${esc(path.basename(jsonlPath))}</code></div>
+    </div>
+  </header>
+  <div id="root"><div class="empty">Aguardando primeira geração…</div></div>
+</main>
 <script>
   const root = document.getElementById("root");
   const es = new EventSource("/events");
@@ -73,11 +79,21 @@ export function createLineageServer(jsonlPath) {
 }
 
 function main() {
-  const args = process.argv.slice(2);
-  const jsonlPath = args.find((a) => !a.startsWith("--")) || path.join(os.homedir(), ".automaton", "carry-lineage.jsonl");
-  const portArg = args.indexOf("--port");
-  const port = portArg >= 0 ? Number(args[portArg + 1]) : 7878;
-  const open = args.includes("--open");
+  const argv = process.argv.slice(2);
+  let jsonlPath = null;
+  let port = 7878;
+  let open = false;
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === "--port") {
+      port = Number(argv[++i]); // consume the value so it is not mistaken for the path
+    } else if (a === "--open") {
+      open = true;
+    } else if (!a.startsWith("--") && jsonlPath === null) {
+      jsonlPath = a;
+    }
+  }
+  jsonlPath = jsonlPath || path.join(os.homedir(), ".automaton", "carry-lineage.jsonl");
   fs.mkdirSync(path.dirname(jsonlPath), { recursive: true });
   const server = createLineageServer(jsonlPath);
   server.listen(port, () => {
