@@ -36,6 +36,23 @@ describe("runCarryFirm", () => {
     db.close();
   });
 
+  it("liquidates position and triggers death when adverse basis wipes out book", () => {
+    const db = createDatabase(":memory:");
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), "carry-firm-"));
+    // Bar 0: enters at basis 0.
+    // Bar 1+: mark price explodes 5x above spot, causing huge basis loss wiping out small 2000c ($20) book.
+    const spikeBars: CarryBar[] = [
+      { time: 0, spotCents: 5_000_000, markCents: 5_000_000, fundingRate: 0.0010 },
+      { time: 8 * 3600 * 1000, spotCents: 5_000_000, markCents: 30_000_000, fundingRate: 0.0010 },
+      { time: 16 * 3600 * 1000, spotCents: 5_000_000, markCents: 30_000_000, fundingRate: 0.0010 },
+    ];
+    const res = runCarryFirm({ db, bars: spikeBars, seniorStartCents: 2000, homeDir: home });
+    expect(res.traders.some((t) => t.status === "dead")).toBe(true);
+    const liveSeniors = res.traders.filter((t) => t.role === "senior" && t.status === "live");
+    expect(liveSeniors.length).toBe(3); // backfilled
+    db.close();
+  });
+
   it("writes a per-trader stats sidecar", () => {
     const db = createDatabase(":memory:");
     const home = fs.mkdtempSync(path.join(os.tmpdir(), "carry-firm-"));

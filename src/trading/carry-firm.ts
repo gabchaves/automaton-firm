@@ -4,7 +4,7 @@ import { ulid } from "ulid";
 import type { AutomatonDatabase } from "../types.js";
 import type { TraderRow } from "./types.js";
 import type { CarryBar, CarryParams } from "./carry-types.js";
-import { initCarryState, stepCarry, type CarryState } from "./carry-engine.js";
+import { initCarryState, stepCarry, closeCarryPosition, type CarryState } from "./carry-engine.js";
 import { CARRY_ARCHETYPES, internParamsFrom } from "./carry-archetypes.js";
 import { insertTrader, listTraders, updateTraderBalance, addRealizedPnl } from "./repo.js";
 import { deathSweep } from "./firm.js";
@@ -15,6 +15,7 @@ export interface CarryTraderStat {
   cycles: number;
   fundingCents: number;
   feesCents: number;
+  basisCents: number;
 }
 
 export interface CarryFirmResult {
@@ -69,7 +70,7 @@ export function runCarryFirm(deps: {
     };
     insertTrader(raw, row);
     carry.set(id, { state: initCarryState(), params: arch.params });
-    stats.set(id, { traderId: id, archetype: arch.name, cycles: 0, fundingCents: 0, feesCents: 0 });
+    stats.set(id, { traderId: id, archetype: arch.name, cycles: 0, fundingCents: 0, feesCents: 0, basisCents: 0 });
   };
 
   const t0 = deps.bars.length ? new Date(deps.bars[0].time).toISOString() : new Date(0).toISOString();
@@ -85,7 +86,7 @@ export function runCarryFirm(deps: {
       if (!lc) continue;
       const r = stepCarry(lc.state, bar, lc.params, { barIndex: t, equityCents: trader.bookBalanceCents });
       lc.state = r.state;
-      const delta = r.fundingCents - r.feesCents;
+      const delta = r.fundingCents - r.feesCents + r.realizedBasisCents;
       if (delta !== 0) {
         updateTraderBalance(raw, trader.id, trader.bookBalanceCents + delta);
         addRealizedPnl(raw, trader.id, delta);
@@ -94,11 +95,28 @@ export function runCarryFirm(deps: {
       if (st) {
         st.fundingCents += r.fundingCents;
         st.feesCents += r.feesCents;
+        st.basisCents += r.realizedBasisCents;
         if (r.closedCycle) st.cycles += 1;
+      }
+
+      // Check mark-to-market equity for liquidation
+      const currentBook = trader.bookBalanceCents + delta;
+      const equity = currentBook + r.unrealizedBasisCents;
+      if (equity <= 0 && lc.state.inPosition) {
+        const c = closeCarryPosition(lc.state, bar);
+        lc.state = c.state;
+        const exitDelta = c.realizedBasisCents - c.feesCents;
+        updateTraderBalance(raw, trader.id, currentBook + exitDelta);
+        addRealizedPnl(raw, trader.id, exitDelta);
+        if (st) {
+          st.feesCents += c.feesCents;
+          st.basisCents += c.realizedBasisCents;
+          if (c.closedCycle) st.cycles += 1;
+        }
       }
     }
 
-    // 2. RH: death sweep (book <= 0). Rare in v1 — delta-neutral carry does not ruin.
+    // 2. RH: death sweep (book <= 0).
     for (const id of deathSweep(raw, at)) carry.delete(id);
 
     // 3. RH: backfill seniors to the floor.
@@ -135,7 +153,7 @@ export function runCarryFirm(deps: {
       updateTraderBalance(raw, senior.id, senior.bookBalanceCents - stake);
       insertTrader(raw, internRow);
       carry.set(internId, { state: initCarryState(), params: internParamsFrom(parentParams) });
-      stats.set(internId, { traderId: internId, archetype: arch, cycles: 0, fundingCents: 0, feesCents: 0 });
+      stats.set(internId, { traderId: internId, archetype: arch, cycles: 0, fundingCents: 0, feesCents: 0, basisCents: 0 });
     }
   }
 
