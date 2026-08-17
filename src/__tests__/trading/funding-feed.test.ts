@@ -1,0 +1,36 @@
+import { describe, it, expect } from "vitest";
+import { fetchCarrySeries } from "../../trading/funding-feed.js";
+
+const H = 8 * 3600 * 1000;
+const fundingPayload = [
+  { symbol: "BTCUSDT", fundingTime: H, fundingRate: "0.00010000" },
+  { symbol: "BTCUSDT", fundingTime: 2 * H, fundingRate: "0.00020000" },
+];
+const klinePayload = [
+  [H, "50000.00", "50100.00", "49900.00", "50050.00", "10", 0],
+  [2 * H, "50050.00", "50200.00", "50000.00", "50150.00", "12", 0],
+];
+
+const stubFetch = (async (url: string | URL) => {
+  const u = String(url);
+  if (u.includes("fundingRate")) return { ok: true, json: async () => fundingPayload } as Response;
+  if (u.includes("klines")) return { ok: true, json: async () => klinePayload } as Response;
+  throw new Error(`unexpected url ${u}`);
+}) as unknown as typeof fetch;
+
+describe("fetchCarrySeries", () => {
+  it("aligns funding rates to spot closes into CarryBars", async () => {
+    const bars = await fetchCarrySeries("BTCUSDT", 2, stubFetch);
+    expect(bars).toHaveLength(2);
+    expect(bars[0].fundingRate).toBeCloseTo(0.0001);
+    expect(bars[0].spotCents).toBe(5_005_000); // 50050.00 * 100
+    expect(bars[0].markCents).toBe(bars[0].spotCents);
+    expect(bars[1].fundingRate).toBeCloseTo(0.0002);
+    expect(bars[1].spotCents).toBe(5_015_000); // 50150.00 * 100
+  });
+
+  it("rejects a malformed funding payload", async () => {
+    const bad = (async () => ({ ok: true, json: async () => [{ nope: 1 }] } as Response)) as unknown as typeof fetch;
+    await expect(fetchCarrySeries("BTCUSDT", 1, bad)).rejects.toThrow();
+  });
+});
