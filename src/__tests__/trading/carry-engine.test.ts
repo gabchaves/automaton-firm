@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { runCarryBacktest } from "../../trading/carry-engine.js";
+import { runCarryBacktest, initCarryState, stepCarry, closeCarryPosition } from "../../trading/carry-engine.js";
 import type { CarryBar, CarryParams } from "../../trading/carry-types.js";
 
 const params: CarryParams = { enterFundingBps: 1, exitFundingBps: 0, maxHoldBars: 999, minBarsBetweenTrades: 0 };
@@ -41,5 +41,41 @@ describe("carry engine", () => {
     const r = runCarryBacktest(bars, churn, 1_000_000);
     expect(r.feesPaidCents).toBeGreaterThan(0);
     expect(r.closedTrades).toBeGreaterThan(1);
+  });
+});
+
+describe("stepCarry", () => {
+  const p = { enterFundingBps: 1, exitFundingBps: 0, maxHoldBars: 999, minBarsBetweenTrades: 0 };
+  const b = (rate: number, time = 0) => ({ time, spotCents: 5_000_000, markCents: 5_000_000, fundingRate: rate });
+
+  it("opens on the entry bar, charging the entry fee, no funding that bar", () => {
+    const r = stepCarry(initCarryState(), b(0.0002), p, { barIndex: 0, equityCents: 1_000_000 });
+    expect(r.state.inPosition).toBe(true);
+    expect(r.fundingCents).toBe(0);
+    expect(r.feesCents).toBe(750); // round(0.5 * 1_000_000 * 15 / 10000)
+    expect(r.closedCycle).toBeNull();
+  });
+
+  it("accrues funding while in position", () => {
+    const open = stepCarry(initCarryState(), b(0.0002), p, { barIndex: 0, equityCents: 1_000_000 });
+    const held = stepCarry(open.state, b(0.0002), p, { barIndex: 1, equityCents: 1_000_000 });
+    expect(held.fundingCents).toBe(100); // round(0.0002 * 500_000)
+    expect(held.closedCycle).toBeNull();
+  });
+
+  it("closes when funding drops to the exit threshold, charging the exit fee", () => {
+    const open = stepCarry(initCarryState(), b(0.0002), p, { barIndex: 0, equityCents: 1_000_000 });
+    const exit = stepCarry(open.state, b(-0.0001, 8), p, { barIndex: 1, equityCents: 1_000_000 });
+    expect(exit.closedCycle).not.toBeNull();
+    expect(exit.feesCents).toBe(750);
+    expect(exit.state.inPosition).toBe(false);
+  });
+
+  it("closeCarryPosition force-closes an open position with an exit fee", () => {
+    const open = stepCarry(initCarryState(), b(0.0002), p, { barIndex: 0, equityCents: 1_000_000 });
+    const c = closeCarryPosition(open.state, 99);
+    expect(c.closedCycle).not.toBeNull();
+    expect(c.feesCents).toBe(750);
+    expect(c.state.inPosition).toBe(false);
   });
 });
