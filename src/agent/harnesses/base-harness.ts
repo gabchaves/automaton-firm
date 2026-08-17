@@ -87,6 +87,15 @@ export abstract class BaseHarness implements AgentHarness {
     return lines.join("\n");
   }
 
+  /**
+   * Called when the model returns a response with no tool calls. Default:
+   * the task is done. Subclasses may override to keep looping (with a nudge)
+   * when a text-only response is not an acceptable way to finish.
+   */
+  protected onTextOnlyResponse(_content: string): { continue: boolean; nudge?: string } {
+    return { continue: false };
+  }
+
   async execute(): Promise<TaskResult> {
     this.context.budget.startedAt = Date.now();
 
@@ -239,6 +248,12 @@ export abstract class BaseHarness implements AgentHarness {
         continue;
       }
 
+      const textOnly = this.onTextOnlyResponse(response.content || "");
+      if (textOnly.continue) {
+        this.messages.push({ role: "assistant", content: response.content || "" });
+        this.messages.push({ role: "system", content: textOnly.nudge ?? "Continue by calling a tool." });
+        continue;
+      }
       finalOutput = response.content || "Task completed.";
       finalSuccess = true;
       logger.info(
