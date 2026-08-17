@@ -14,3 +14,5 @@ dist
 
 # generated dashboard snapshot
 firm-dashboard.html
+firm-live-run.log
+firm-live.db
