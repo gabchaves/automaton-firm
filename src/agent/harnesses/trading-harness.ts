@@ -2,6 +2,7 @@ import { BaseHarness } from "./base-harness.js";
 import type { HarnessTool } from "../harness-types.js";
 import { toolsForRole } from "../tool-profiles.js";
 import { getTrader, loadBook } from "../../trading/repo.js";
+import { loadStrategySkill } from "../../trading/strategy.js";
 import { executeTool } from "../tools.js";
 import { sanitizeToolResult } from "../injection-defense.js";
 import type { SpendTrackerInterface } from "../../types.js";
@@ -40,17 +41,20 @@ export class TradingHarness extends BaseHarness {
       const trader = getTrader(this.context.db, traderId);
       if (trader) {
         role = trader.role;
-        strategy = trader.strategySkill ? `\nStrategy Skill: ${trader.strategySkill}` : "";
+        const skillBody = loadStrategySkill(trader.strategySkill);
+        strategy = skillBody
+          ? `\n\n## Your Strategy (${trader.strategySkill})\n${skillBody}`
+          : (trader.strategySkill ? `\n\n## Strategy Skill\n${trader.strategySkill}` : "");
         const book = loadBook(this.context.db, traderId);
         bookInfo = `Cash Balance: $${(book.balanceCents / 100).toFixed(2)} (${book.balanceCents} cents)\nPositions: ${JSON.stringify(book.positions)}`;
       }
     }
 
     return `You are an autonomous paper trader with role: ${role}.
-Trader ID: ${traderId}${strategy}
+Trader ID: ${traderId}
 
 ## Current Book State
-${bookInfo}
+${bookInfo}${strategy}
 
 ## Your Decision This Tick
 You MUST reach one explicit decision before calling task_done:

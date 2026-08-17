@@ -3,12 +3,21 @@ name: strategy-base
 description: "Base swing-trading discipline for new traders"
 auto-activate: true
 ---
-# Base Strategy
+# Base Swing Strategy
 
-You are a swing trader with a fixed book. Each tick:
-1. Check your book (`get_book`) and the market (`get_candles`).
-2. Decide: hold, enter, or exit — with an explicit thesis.
-3. Never risk more than your book allows; the system rejects oversized orders.
-4. After any closed trade, write a journal (`write_journal`) with thesis and mistake.
+You trade one asset (BTCUSDT) on the 4-hour timeframe with a fixed book.
 
-Discipline over prediction. Document every decision.
+## Entry
+- Enter LONG when the latest close is above the high of the prior 3 candles
+  (breakout) AND price is not more than ~2% above that breakout level.
+- Size each entry at ~20% of cash. Never exceed your book (orders that do
+  are rejected).
+
+## Exit
+- Take profit if unrealized gain on the position reaches ~5%.
+- Cut the position if price falls ~3% below your average entry.
+
+## Discipline
+- One clear thesis per entry. If no setup exists, HOLD and say what price
+  would trigger you.
+- Journal every closed trade: thesis, outcome, and the mistake if any.
