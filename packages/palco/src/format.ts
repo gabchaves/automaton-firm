@@ -16,6 +16,36 @@ export function dateShort(ts: number): string {
   return new Date(ts).toISOString().slice(5, 16).replace("T", " ");
 }
 
+// Fixed formatters (not per-call `new Intl.DateTimeFormat(...)`) — cheaper
+// to reuse, and `timeZone` is pinned to Brasília time rather than left to
+// the runtime's local zone: without it, the same `ts` would render a
+// different clock time on a UTC CI box than on a dev machine, which is
+// exactly the kind of non-determinism this codebase avoids everywhere else
+// (mirrors `relativeTime`'s "caller supplies now" rule below).
+const ORKUT_DATE_FORMAT = new Intl.DateTimeFormat("pt-BR", {
+  day: "2-digit",
+  month: "2-digit",
+  year: "numeric",
+  timeZone: "America/Sao_Paulo",
+});
+const ORKUT_TIME_FORMAT = new Intl.DateTimeFormat("pt-BR", {
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+  timeZone: "America/Sao_Paulo",
+});
+
+/** Absolute Orkut-scrap timestamp — "em DD/MM/AAAA HH:MM", Brasília time.
+ * Task 5 of the v3 plan calls for this exact classic-Orkut absolute
+ * format (as opposed to `relativeTime`'s "há 3 min"); built from plain
+ * `Intl.DateTimeFormat` per the plan's explicit "no new dep" ruling — no
+ * date-fns. Date and time are formatted separately and joined with a
+ * plain space so the output never depends on an ICU version's default
+ * date+time join punctuation (some locales/versions insert a comma). */
+export function absoluteTimestamp(ts: number): string {
+  return `em ${ORKUT_DATE_FORMAT.format(ts)} ${ORKUT_TIME_FORMAT.format(ts)}`;
+}
+
 const MINUTE_MS = 60_000;
 const HOUR_MS = 3_600_000;
 const DAY_MS = 86_400_000;

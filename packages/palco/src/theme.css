@@ -349,175 +349,251 @@ footer.honesty p {
   padding: 2px 7px;
 }
 
-/* ---------- Mural: old-social-network post boxes ---------- */
+/* ---------- Mural: Orkut scrapbook (v3 Task 5) ---------- */
+/* An "old page on the old screen" concept: this is the one deliberate
+ * in-frame LIGHT retro inset inside the otherwise-dark pxpush identity.
+ * Every color/font below is set explicitly (never inherited from the
+ * page's dark --ink/--bg tokens) since this panel has to read as a
+ * genuinely different, lighter surface floating on the dark page. */
 
-/* The disclaimer doubles up as `.label` (see MuralTab.tsx) for the chip
- * typography — this rule only carries its layout spacing. */
-.mural-disclaimer {
-  margin: 0 0 14px;
+.orkut-panel {
+  position: relative; /* anchors .orkut-scanlines */
+  max-width: 860px;
+  margin: 0 auto;
+  border-radius: 8px;
+  overflow: hidden;
+  font-family: Verdana, Geneva, sans-serif;
+  font-size: 12px;
+  color: #333;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
 }
 
-ul.mural-feed {
+/* Stronger scanlines than the page-level .page::before (0.03 alpha) —
+ * this panel is the "screen", so its texture reads heavier. */
+.orkut-scanlines {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0.07) 0,
+    rgba(0, 0, 0, 0.07) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+}
+
+.orkut-header-bar {
+  background: #a8b8d8;
+  padding: 8px 12px 0;
+}
+
+.orkut-tabs {
+  display: flex;
+  gap: 4px;
+}
+
+.orkut-tab {
+  display: inline-block;
+  padding: 6px 16px;
+  border-radius: 6px 6px 0 0;
+  font-size: 12px;
+  font-weight: bold;
+  color: #33475b;
+  background: #c3d0e8;
+}
+
+.orkut-tab-active {
+  background: #e8eef7;
+  color: #315c99;
+}
+
+.orkut-breadcrumb {
+  background: #a8b8d8;
+  padding: 5px 12px 8px;
+  font-size: 11px;
+  color: #33475b;
+}
+
+.orkut-crumb-link,
+.orkut-crumb-current {
+  color: #315c99;
+  text-decoration: underline;
+  cursor: default;
+}
+
+.orkut-body {
+  background: #e8eef7;
+  padding: 14px;
+}
+
+.orkut-visitor-counter {
+  margin: 0 0 10px;
+  text-align: right;
+  font-size: 11px;
+  color: #5a6b85;
+}
+
+/* Fun-pass addendum's decorative "comunidades" box — 3 fixed joke
+ * communities, never real data (see JOKE_COMMUNITIES in MuralTab.tsx). */
+.orkut-communities {
+  background: #fff;
+  border: 1px solid #b7c4dd;
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin-bottom: 14px;
+}
+
+.orkut-communities h4 {
+  margin: 0 0 6px;
+  font-size: 11px;
+  color: #315c99;
+}
+
+.orkut-communities ul {
+  margin: 0;
+  padding-left: 16px;
+}
+
+.orkut-communities li {
+  color: #333;
+  margin-bottom: 2px;
+  font-size: 11px;
+}
+
+ul.orkut-scrap-list {
   list-style: none;
   margin: 0;
   padding: 0;
+}
+
+/* Dotted separators between scraps — the classic Orkut rule, per the plan. */
+li.orkut-scrap {
   display: flex;
-  flex-direction: column;
-  gap: 14px;
+  gap: 10px;
+  padding: 12px 0;
+  border-bottom: 1px dotted #b7c4dd;
 }
 
-li.mural-post {
-  display: flex;
-  flex-direction: column;
-  background: var(--black);
-  border: var(--border-fade);
-  border-radius: var(--radius);
-  overflow: hidden; /* clip the title bar's square corners to the card's tiny radius */
+li.orkut-scrap:last-child {
+  border-bottom: none;
 }
 
-/* Big-pnl posts (ungrouped trade_closed) get a colored left accent —
- * small/grouped trades never carry a pnlClass, so they stay neutral. */
-.mural-post.post-pnl-pos {
-  border-left: 3px solid var(--green);
+/* New-scrap yellow flash — the framer-motion slide-down on `li.orkut-scrap`
+ * itself (see MuralTab.tsx) handles the entrance; this CSS keyframe is the
+ * separate old-social-network "just arrived" tint, applied only alongside
+ * that same `highlighted` condition. Fades to transparent (not a hardcoded
+ * bg color) so it works over this panel's #e8eef7 body correctly. */
+.orkut-scrap-new {
+  animation: orkutFlashNew 2.4s ease-out;
 }
 
-.mural-post.post-pnl-neg {
-  border-left: 3px solid var(--red);
+@keyframes orkutFlashNew {
+  from {
+    background: rgba(255, 224, 82, 0.65);
+  }
+  to {
+    background: transparent;
+  }
 }
 
-/* Title bar — the retro signature: full-width grey strip, blue text,
- * square avatar, bold name + cargo, right-aligned "scrap #N" and mono
- * timestamp. */
-.mural-post-titlebar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: var(--ink);
-  color: var(--blue);
-  padding: 6px 10px;
-}
-
-.post-avatar {
+.orkut-avatar {
   flex: 0 0 auto;
-  width: 28px;
-  height: 28px;
-  border-radius: 0;
+  width: 48px;
+  height: 48px;
+  border: 2px solid #fff;
+  box-shadow: 0 0 3px rgba(0, 0, 0, 0.35);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: var(--font-mono);
-  font-size: 11px;
   font-weight: bold;
-  color: var(--ink);
+  font-size: 14px;
+  color: #fff;
 }
 
-.mural-post-who {
-  display: flex;
-  flex-direction: column;
-  line-height: 1.25;
+.orkut-scrap-main {
+  flex: 1 1 auto;
   min-width: 0;
 }
 
-.author-name {
-  font-weight: 500;
-  color: var(--blue);
+.orkut-scrap-header {
+  margin-bottom: 3px;
 }
 
-.author-cargo {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--blue);
-  opacity: 0.75;
+.orkut-author-link {
+  font-weight: bold;
+  color: #315c99;
+  text-decoration: underline;
+  cursor: default;
 }
 
-.mural-scrap {
-  margin-left: auto;
-  font-family: var(--font-mono);
-  font-size: 10px;
-  color: var(--blue);
-  opacity: 0.7;
-  white-space: nowrap;
+.orkut-cargo {
+  margin-left: 6px;
+  font-size: 10.5px;
+  color: #7c8aa3;
 }
 
-.post-ts {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  color: var(--blue);
-  white-space: nowrap;
+.orkut-scrap-box {
+  background: #fff;
+  border: 1px solid #ccd6e6;
+  border-radius: 6px;
+  padding: 8px 10px;
 }
 
-.post-body {
-  padding: 12px 14px 4px;
+/* Post-type headline — kept small/bold/dark per the plan, not the loud
+ * pxpush display treatment used elsewhere. */
+.orkut-headline {
+  margin: 0 0 3px;
+  font-size: 11.5px;
+  font-weight: bold;
+  color: #222;
 }
 
-.post-headline {
-  font-size: 14px;
-  color: var(--ink);
+.orkut-post-text {
+  margin: 0;
+  color: #333;
+  line-height: 1.45;
 }
 
-.post-text {
-  margin: 4px 0 0;
-  font-size: 13.5px;
-  color: var(--ink);
-  line-height: 1.5;
-}
-
-.post-reason {
-  margin: 8px 0 0;
-  padding-left: 10px;
-  border-left: 2px solid var(--border-color-fade);
-  font-size: 12px;
-  color: var(--lightgrey);
+.orkut-quoted {
+  margin: 6px 0 0;
+  padding-left: 8px;
+  border-left: 2px solid #ccd6e6;
+  color: #667;
   font-style: italic;
 }
 
-/* Footer bar — old-style reaction counters plus decorative, non-interactive
- * pseudo-links ("curtir · comentar" is set dressing, per the plan). */
-.mural-post-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 10px;
-  padding: 8px 14px 12px;
-  border-top: var(--border-fade);
+.orkut-timestamp {
+  display: block;
   margin-top: 6px;
+  text-align: right;
+  font-size: 10px;
+  color: #8a97ab;
 }
 
-.post-reactions {
-  display: flex;
-  align-items: center;
-  gap: 14px;
+.orkut-footer-links {
+  margin-top: 4px;
+  font-size: 10.5px;
+  color: #5a6b85;
 }
 
-.reaction {
-  font-size: 12px;
-  color: var(--lightgrey);
-  font-family: var(--font-mono);
-}
-
-.mural-pseudo-links {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--lightblue);
+.orkut-reaction-link {
+  color: #315c99;
   text-decoration: underline;
   cursor: default;
-  white-space: nowrap;
 }
 
-.fade-highlight {
-  animation: fadeHighlight 2.4s ease-out;
-}
-
-@keyframes fadeHighlight {
-  from {
-    background: rgba(15, 255, 0, 0.15);
-  }
-  to {
-    background: var(--black);
-  }
+/* Tiny grey panel footer — the disclaimer, restyled to live inside the
+ * light inset rather than as the page's dark `.label` chip. */
+.orkut-disclaimer-footer {
+  margin: 10px 0 0;
+  padding: 6px 10px;
+  background: #dbe4f2;
+  border-radius: 4px;
+  text-align: center;
+  font-size: 10px;
+  color: #68758c;
 }
 
 /* ---------- Empresa ---------- */
