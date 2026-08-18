@@ -51,7 +51,10 @@ describe("App", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Leaderboard" }));
 
-    expect(screen.getByText("Ada Faria")).toBeInTheDocument();
+    // "Ada Faria" now renders twice — once in the top-3 podium strip, once
+    // in the DataTable row (see LeaderboardTab.test.tsx for the detailed
+    // per-column assertions) — so this smoke test just confirms it's there.
+    expect(screen.getAllByText("Ada Faria").length).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: "Leaderboard" })).toHaveAttribute("aria-current", "page");
   });
 

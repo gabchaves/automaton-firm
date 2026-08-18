@@ -951,11 +951,125 @@ ul.trade-feed .ts {
   background: var(--bg);
 }
 
-.leaderboard-table .genome-chips {
-  max-width: 320px;
+/* ---------- Leaderboard (v3 cleanup: ranks, moods, no abstract columns) ---------- */
+
+.rank-chip {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: bold;
+  background: var(--green);
+  color: var(--black);
+  padding: 1px 8px;
 }
 
-.achievements .badge {
-  margin-right: 4px;
+.rank-plain {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--lightgrey);
+}
+
+.row-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mini-avatar {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  font-weight: bold;
+  color: var(--ink);
+}
+
+.row-name-text {
+  min-width: 0;
+}
+
+.mood-emoji {
+  margin-left: 5px;
+}
+
+/* Subtle achievements badge — replaces the old one-icon-per-achievement
+ * row; count only, full list in the title tooltip. Hidden entirely (see
+ * LeaderboardTab.tsx) when a trader has zero achievements. */
+.achv-badge {
+  margin-left: 6px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--lightgrey);
   cursor: default;
+}
+
+.mono-bold {
+  font-weight: bold;
+}
+
+.pnl-value.pnl-pos {
+  color: var(--green);
+}
+
+.pnl-value.pnl-neg {
+  color: var(--red);
+}
+
+/* Row hover: raised bg (lighter than the row's own --black) + a hairline
+ * left accent. */
+.leaderboard-table .p-datatable-tbody > tr {
+  border-left: 3px solid transparent;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease;
+}
+
+.leaderboard-table .p-datatable-tbody > tr:not(.p-highlight):hover {
+  background: var(--bg);
+  border-left-color: var(--green);
+}
+
+/* Podium strip — the cheaper reorder-animation fallback (see
+ * LeaderboardTab.tsx's PodiumStrip doc comment): PrimeReact's DataTable
+ * rows can't carry framer-motion's `layout` prop directly, so only this
+ * small top-3 strip above the table actually animates rank changes. */
+.podium-strip {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.podium-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--black);
+  border: var(--border-fade);
+  padding: 8px 14px;
+  min-width: 180px;
+}
+
+.podium-rank-1 {
+  border-color: var(--green);
+}
+
+.podium-medal {
+  font-size: 16px;
+}
+
+.podium-name {
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.podium-book {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  color: var(--green);
+  font-size: 13px;
 }

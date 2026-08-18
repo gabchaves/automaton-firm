@@ -4,25 +4,52 @@ import { LeaderboardTab } from "../tabs/LeaderboardTab";
 import { fixtureSnapshot } from "./fixtures";
 
 describe("LeaderboardTab", () => {
-  it("renders trader names and achievement badges from the snapshot", () => {
+  it("renders trader names and a single achievements-count badge with a tooltip listing labels", () => {
     render(<LeaderboardTab snapshot={fixtureSnapshot} />);
 
-    expect(screen.getByText("Ada Faria")).toBeInTheDocument();
-    expect(screen.getByText("Rand-7")).toBeInTheDocument();
+    expect(screen.getAllByText("Ada Faria").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Rand-7").length).toBeGreaterThan(0);
 
-    const badges = screen.getAllByText("✨");
-    expect(badges).toHaveLength(2); // Ada Faria has 2 achievements in the fixture; Rand-7 has 0
+    // Ada Faria has 2 achievements in the fixture -> a single "✨2" badge,
+    // not one icon per achievement.
+    const badge = screen.getByText("✨2");
+    expect(badge).toHaveAttribute("title", "Primeira semana viva, Dobrou o book");
 
-    expect(badges[0]).toHaveAttribute("title", "Primeira semana viva");
-    expect(badges[1]).toHaveAttribute("title", "Dobrou o book");
+    // Rand-7 has zero achievements -> no badge at all.
+    expect(screen.queryByText("✨0")).not.toBeInTheDocument();
   });
 
-  it("renders the structured genome as GenomeChips instead of the raw family string", () => {
+  it("no longer renders the genoma or conquistas columns (too abstract, per user feedback)", () => {
     render(<LeaderboardTab snapshot={fixtureSnapshot} />);
 
-    // From the fixture's Ada Faria genome: momentum(8, 34) + breakout(20).
-    expect(screen.getByText("⚡ Momentum 8/34b")).toBeInTheDocument();
-    expect(screen.getByText("🚪 Breakout 20b")).toBeInTheDocument();
+    expect(screen.queryByText("Genoma")).not.toBeInTheDocument();
+    expect(screen.queryByText("Conquistas")).not.toBeInTheDocument();
+    // The old genome chips rendered gene family labels like "momentum" —
+    // confirm none of that leaks through anymore.
+    expect(screen.queryByText(/momentum/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/⚡ Momentum/)).not.toBeInTheDocument();
+  });
+
+  it("shows a green rank chip for the top-3 rows and a P&L % column derived from realized P&L", () => {
+    render(<LeaderboardTab snapshot={fixtureSnapshot} />);
+
+    // Ada Faria is row 1 (highest book) -> rank chip "1".
+    const rankChips = document.querySelectorAll(".rank-chip");
+    expect(Array.from(rankChips).map((el) => el.textContent)).toContain("1");
+
+    // Ada Faria: realizedPnlMc 120_000 / STAKE_MC 2_000_000 * 100 = 6.0%.
+    expect(screen.getByText("6.0%")).toBeInTheDocument();
+    // Rand-7: -20_000 / 2_000_000 * 100 = -1.0%.
+    expect(screen.getByText("-1.0%")).toBeInTheDocument();
+  });
+
+  it("shows a mood emoji next to each trader's name", () => {
+    render(<LeaderboardTab snapshot={fixtureSnapshot} />);
+
+    // One .mood-emoji span per fixture trader (Ada Faria, Rand-7); the
+    // exact emoji per status/book ratio is covered by mood.test.tsx.
+    const moodEmojis = document.querySelectorAll(".mood-emoji");
+    expect(moodEmojis.length).toBe(2);
   });
 
   it("renders an empty table without crashing when there is no snapshot yet", () => {
