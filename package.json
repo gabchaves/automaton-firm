@@ -43,6 +43,7 @@
     "dev": "tsx watch src/index.ts",
     "motor": "node dist/motor/index.js run",
     "motor:status": "node dist/motor/index.js status",
+    "motor:dashboard": "node scripts/motor-dashboard.mjs --watch",
     "motor:dev": "tsx src/motor/index.ts run",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
