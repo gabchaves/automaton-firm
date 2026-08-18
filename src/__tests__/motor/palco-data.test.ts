@@ -50,6 +50,9 @@ function generationRow(overrides: Partial<GenerationRow>): GenerationRow {
   };
 }
 
+const HR_POLICY =
+  "RH baseado em evidência: compara cada trader ao benchmark max(controle aleatório, não fazer nada) na mesma janela de 7 dias. Demite só com evidência clara de underperformance; evidência insuficiente nunca demite nem promove.";
+
 describe("buildSnapshot: cards", () => {
   test("record = max(ended peak, live peak); gensN counts both; virginDays to 1 decimal", () => {
     const d = fresh();
@@ -173,6 +176,41 @@ describe("buildSnapshot: leaderboard", () => {
   });
 });
 
+describe("buildSnapshot: leaderboard genome struct", () => {
+  test("genome.genes carries family + params, with family stripped out of params", () => {
+    const d = fresh();
+    d.insertGeneration(generationRow({ id: "g1", cohort: "evolved", genNumber: 1, startedAt: 0, endedAt: null }));
+    const rawGenomeJson = JSON.stringify({
+      symbol: "ETHUSDT",
+      leverage: 3,
+      riskFraction: 0.6,
+      combinator: "all",
+      genes: [
+        { family: "momentum", fastBars: 5, slowBars: 40 },
+        { family: "breakout", channelBars: 20 },
+      ],
+    });
+    d.insertTrader(traderRow({ id: "e1", generationId: "g1", cohort: "evolved", name: "Ana Faria", genomeJson: rawGenomeJson }));
+
+    const snap = buildSnapshot(d.raw, 0);
+    const ana = snap.leaderboard.find((r) => r.name === "Ana Faria");
+
+    expect(ana?.genome).toEqual({
+      symbol: "ETHUSDT",
+      leverage: 3,
+      riskFraction: 0.6,
+      combinator: "all",
+      genes: [
+        { family: "momentum", params: { fastBars: 5, slowBars: 40 } },
+        { family: "breakout", params: { channelBars: 20 } },
+      ],
+    });
+    // Back-compat string fields stay untouched.
+    expect(ana?.genes).toBe("momentum + breakout");
+    expect(ana?.combinator).toBe("all");
+  });
+});
+
 describe("buildSnapshot: feed", () => {
   test("newest 40 first, excludes motor_started/motor_stopped, html is the formatted string", () => {
     const d = fresh();
@@ -191,6 +229,17 @@ describe("buildSnapshot: feed", () => {
     expect(snap.feed[0].html).toBe(formatEventPt("catch_up", { bars: 44 }));
     expect(snap.feed[0].html).toBe("⏪ catch-up de 44 barras");
     expect(snap.feed[39].html).toBe(formatEventPt("catch_up", { bars: 5 }));
+  });
+
+  test("feed items carry the parsed payload alongside html", () => {
+    const d = fresh();
+    d.insertGeneration(generationRow({ id: "g1" }));
+    d.insertEvent({ ts: 5, type: "catch_up", traderId: null, generationId: null, payloadJson: JSON.stringify({ fromTs: 0, toTs: 1, bars: 7 }) });
+
+    const snap = buildSnapshot(d.raw, 0);
+
+    expect(snap.feed[0].payload).toEqual({ fromTs: 0, toTs: 1, bars: 7 });
+    expect(snap.feed[0].html).toBe("⏪ catch-up de 7 barras");
   });
 
   test("lastEventId is the max event id across all events, including excluded types", () => {
@@ -212,5 +261,80 @@ describe("buildSnapshot: feed", () => {
     expect(snap.leaderboard).toEqual([]);
     expect(snap.generations).toEqual([]);
     expect(snap.generatedAt).toBe(42);
+    expect(snap.org.employees).toEqual([]);
+    expect(snap.org.history).toEqual([]);
+    expect(snap.org.hrPolicy).toBe(HR_POLICY);
+  });
+});
+
+describe("buildSnapshot: org.employees", () => {
+  test("resolves parentTraderId -> parentName from the trader's own trader_hired event; seedNote from the generation row", () => {
+    const d = fresh();
+    d.insertGeneration(generationRow({ id: "g1", cohort: "evolved", genNumber: 2, startedAt: 0, endedAt: null, seedNote: "2 clones + 1 mutant" }));
+    d.insertGeneration(generationRow({ id: "gr1", cohort: "random", genNumber: 2, startedAt: 0, endedAt: null, seedNote: "random-control" }));
+
+    d.insertTrader(traderRow({ id: "parent1", generationId: "g1", cohort: "evolved", name: "Origem Silva", slot: 0, status: "live", bookMc: 400_000 }));
+    d.insertTrader(traderRow({ id: "child1", generationId: "g1", cohort: "evolved", name: "Filho Costa", slot: 1, status: "live", bookMc: 250_000 }));
+
+    d.insertEvent({ ts: 0, type: "trader_hired", traderId: "parent1", generationId: "g1", payloadJson: JSON.stringify({ name: "Origem Silva", slot: 0, stakeMc: 200_000, parentTraderId: null }) });
+    d.insertEvent({ ts: 10, type: "trader_hired", traderId: "child1", generationId: "g1", payloadJson: JSON.stringify({ name: "Filho Costa", slot: 1, stakeMc: 200_000, parentTraderId: "parent1" }) });
+
+    const snap = buildSnapshot(d.raw, 0);
+
+    expect(snap.org.hrPolicy).toBe(HR_POLICY);
+
+    const parent = snap.org.employees.find((e) => e.traderId === "parent1");
+    const child = snap.org.employees.find((e) => e.traderId === "child1");
+
+    expect(parent).toMatchObject({
+      name: "Origem Silva", cohort: "evolved", slot: 0, status: "live", bookMc: 400_000,
+      symbol: "BTCUSDT", leverage: 2, parentTraderId: null, parentName: null, seedNote: "2 clones + 1 mutant",
+    });
+    expect(child).toMatchObject({
+      name: "Filho Costa", parentTraderId: "parent1", parentName: "Origem Silva", seedNote: "2 clones + 1 mutant",
+    });
+  });
+
+  test("excludes employees from ended generations", () => {
+    const d = fresh();
+    d.insertGeneration(generationRow({ id: "g0", cohort: "evolved", genNumber: 1, startedAt: -1000, endedAt: -1 }));
+    d.insertGeneration(generationRow({ id: "g1", cohort: "evolved", genNumber: 2, startedAt: 0, endedAt: null }));
+    d.insertTrader(traderRow({ id: "old1", generationId: "g0", cohort: "evolved", name: "Antigo", slot: 0 }));
+    d.insertTrader(traderRow({ id: "cur1", generationId: "g1", cohort: "evolved", name: "Atual", slot: 0 }));
+    d.insertEvent({ ts: -900, type: "trader_hired", traderId: "old1", generationId: "g0", payloadJson: JSON.stringify({ name: "Antigo", slot: 0, stakeMc: 200_000, parentTraderId: null }) });
+    d.insertEvent({ ts: 0, type: "trader_hired", traderId: "cur1", generationId: "g1", payloadJson: JSON.stringify({ name: "Atual", slot: 0, stakeMc: 200_000, parentTraderId: null }) });
+
+    const snap = buildSnapshot(d.raw, 0);
+    expect(snap.org.employees.map((e) => e.name)).toEqual(["Atual"]);
+  });
+});
+
+describe("buildSnapshot: org.history", () => {
+  test("chronological, only current generations' events, only the tracked event types", () => {
+    const d = fresh();
+    d.insertGeneration(generationRow({ id: "g0", cohort: "evolved", genNumber: 1, startedAt: -1000, endedAt: -1 }));
+    d.insertGeneration(generationRow({ id: "g1", cohort: "evolved", genNumber: 2, startedAt: 0, endedAt: null }));
+    d.insertGeneration(generationRow({ id: "gr1", cohort: "random", genNumber: 2, startedAt: 0, endedAt: null }));
+
+    // Old (ended) generation's events must be excluded, even though the type is tracked.
+    d.insertEvent({ ts: -900, type: "trader_hired", traderId: "old1", generationId: "g0", payloadJson: JSON.stringify({ name: "Antigo", slot: 0, stakeMc: 200_000, parentTraderId: null }) });
+
+    d.insertEvent({ ts: 0, type: "gen_started", traderId: null, generationId: "g1", payloadJson: JSON.stringify({ cohort: "evolved", genNumber: 2, seedNote: "fresh" }) });
+    d.insertEvent({ ts: 5, type: "trader_hired", traderId: "e1", generationId: "g1", payloadJson: JSON.stringify({ name: "Ana Faria", slot: 0, stakeMc: 200_000, parentTraderId: null }) });
+    // Untracked type on a current generation must be excluded too.
+    d.insertEvent({ ts: 3, type: "catch_up", traderId: null, generationId: null, payloadJson: JSON.stringify({ fromTs: 0, toTs: 1, bars: 1 }) });
+    d.insertEvent({ ts: 20, type: "trader_fired", traderId: "e1", generationId: "g1", payloadJson: JSON.stringify({ name: "Ana Faria", reason: "underperform", returnedMc: 50_000 }) });
+
+    const snap = buildSnapshot(d.raw, 0);
+
+    expect(snap.org.history.map((h) => h.type)).toEqual(["gen_started", "trader_hired", "trader_fired"]);
+    expect(snap.org.history.map((h) => h.ts)).toEqual([0, 5, 20]);
+    expect(snap.org.history[1].html).toBe(
+      formatEventPt("trader_hired", { name: "Ana Faria", slot: 0, stakeMc: 200_000, parentTraderId: null }),
+    );
+    expect(snap.org.history[1].payload).toEqual({ name: "Ana Faria", slot: 0, stakeMc: 200_000, parentTraderId: null });
+    expect(
+      snap.org.history.some((h) => h.type === "trader_hired" && (h.payload as { name: string }).name === "Antigo"),
+    ).toBe(false);
   });
 });

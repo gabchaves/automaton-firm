@@ -29,9 +29,26 @@ export interface PalcoSnapshot {
     name: string; cohort: string; genNumber: number;
     status: string; bookMc: number; realizedPnlMc: number; tradesCount: number;
     symbol: string; leverage: number; genes: string; combinator: string;
+    genome: {
+      symbol: string; leverage: number; riskFraction: number; combinator: string;
+      genes: Array<{ family: string; params: Record<string, number> }>; // family key removed from params
+    };
     achievements: string[];
   }>; // labels, from achievement events
-  feed: Array<{ id: number; ts: number; type: string; html: string }>; // 40 newest, html pre-formatted+escaped
+  feed: Array<{ id: number; ts: number; type: string; html: string; payload: Record<string, unknown> }>; // 40 newest, html pre-formatted+escaped
+  org: {
+    hrPolicy: string; // fixed PT string, see HR_POLICY_PT
+    employees: Array<{
+      traderId: string; name: string; cohort: string; slot: number;
+      status: string; bookMc: number; symbol: string; leverage: number;
+      bornAt: number; diedAt: number | null;
+      parentTraderId: string | null; parentName: string | null; // from the trader's own trader_hired event
+      seedNote: string; // the trader's generation seed_note (per-generation, not per-trader — see report)
+    }>; // every trader (any status) of the CURRENT (unended) generations, both cohorts
+    history: Array<{ id: number; ts: number; type: string; html: string; payload: Record<string, unknown> }>;
+    // trader_hired / trader_fired / trader_promoted / gen_started / gen_ended events
+    // belonging to a CURRENT (unended) generation, chronological
+  };
 }
 
 const MS_PER_DAY = 86_400_000;
@@ -39,13 +56,45 @@ const DEFAULT_EQUITY_MC = 1_000_000;
 const MAX_EQUITY_SERIES_POINTS = 400;
 const FEED_LIMIT = 40;
 
+const HR_POLICY_PT =
+  "RH baseado em evidência: compara cada trader ao benchmark max(controle aleatório, não fazer nada) na mesma janela de 7 dias. Demite só com evidência clara de underperformance; evidência insuficiente nunca demite nem promove.";
+
+const ORG_HISTORY_TYPES = ["trader_hired", "trader_fired", "trader_promoted", "gen_started", "gen_ended"];
+
 type Cohort = "evolved" | "random";
+
+interface GenomeGeneRaw {
+  family: string;
+  [key: string]: unknown;
+}
 
 interface GenomeShape {
   symbol: string;
-  genes: { family: string }[];
+  genes: GenomeGeneRaw[];
   combinator: string;
   leverage: number;
+  riskFraction: number;
+}
+
+/** Params for a gene, with the `family` discriminator key removed. */
+function geneParams(gene: GenomeGeneRaw): Record<string, number> {
+  const params: Record<string, number> = {};
+  for (const key of Object.keys(gene)) {
+    if (key === "family") continue;
+    const value = gene[key];
+    if (typeof value === "number") params[key] = value;
+  }
+  return params;
+}
+
+function structuredGenome(genome: GenomeShape): PalcoSnapshot["leaderboard"][number]["genome"] {
+  return {
+    symbol: genome.symbol,
+    leverage: genome.leverage,
+    riskFraction: genome.riskFraction,
+    combinator: genome.combinator,
+    genes: genome.genes.map((gene) => ({ family: gene.family, params: geneParams(gene) })),
+  };
 }
 
 function latestEquityMc(raw: BetterSqlite3.Database, cohort: Cohort): number {
@@ -187,6 +236,7 @@ function computeLeaderboard(raw: BetterSqlite3.Database): PalcoSnapshot["leaderb
       leverage: genome.leverage,
       genes: genome.genes.map((gene) => gene.family).join(" + "),
       combinator: genome.combinator,
+      genome: structuredGenome(genome),
       achievements: achievements.get(row.id) ?? [],
     };
   });
@@ -201,17 +251,102 @@ function computeFeed(raw: BetterSqlite3.Database): PalcoSnapshot["feed"] {
     )
     .all(FEED_LIMIT) as { id: number; ts: number; type: string; payload_json: string }[];
 
-  return rows.map((row) => ({
-    id: row.id,
-    ts: row.ts,
-    type: row.type,
-    html: formatEventPt(row.type, JSON.parse(row.payload_json) as Record<string, unknown>),
-  }));
+  return rows.map((row) => {
+    const payload = JSON.parse(row.payload_json) as Record<string, unknown>;
+    return { id: row.id, ts: row.ts, type: row.type, html: formatEventPt(row.type, payload), payload };
+  });
 }
 
 function lastEventId(raw: BetterSqlite3.Database): number {
   const row = raw.prepare("SELECT MAX(id) AS m FROM events").get() as { m: number | null };
   return row.m ?? 0;
+}
+
+function currentGenerationIds(raw: BetterSqlite3.Database): string[] {
+  const rows = raw.prepare("SELECT id FROM generations WHERE ended_at IS NULL").all() as { id: string }[];
+  return rows.map((row) => row.id);
+}
+
+/** Every trader's name, across all generations — used to resolve a lineage parent that may no longer be "current". */
+function allTraderNames(raw: BetterSqlite3.Database): Map<string, string> {
+  const rows = raw.prepare("SELECT id, name FROM traders").all() as { id: string; name: string }[];
+  return new Map(rows.map((row) => [row.id, row.name]));
+}
+
+/** parentTraderId from the trader's OWN trader_hired event (there is exactly one per trader). */
+function hiredEventParentId(raw: BetterSqlite3.Database, traderId: string): string | null {
+  const row = raw
+    .prepare("SELECT payload_json FROM events WHERE type = 'trader_hired' AND trader_id = ? ORDER BY id ASC LIMIT 1")
+    .get(traderId) as { payload_json: string } | undefined;
+  if (!row) return null;
+  const payload = JSON.parse(row.payload_json) as { parentTraderId?: string | null };
+  return payload.parentTraderId ?? null;
+}
+
+function computeEmployees(raw: BetterSqlite3.Database): PalcoSnapshot["org"]["employees"] {
+  const rows = raw
+    .prepare(
+      `SELECT t.id AS id, t.name AS name, t.cohort AS cohort, t.slot AS slot, t.status AS status,
+              t.book_mc AS book_mc, t.genome_json AS genome_json, t.born_at AS born_at, t.died_at AS died_at,
+              g.seed_note AS seed_note
+       FROM traders t
+       JOIN generations g ON g.id = t.generation_id
+       WHERE g.ended_at IS NULL
+       ORDER BY t.cohort ASC, t.slot ASC`,
+    )
+    .all() as {
+      id: string; name: string; cohort: string; slot: number; status: string; book_mc: number;
+      genome_json: string; born_at: number; died_at: number | null; seed_note: string;
+    }[];
+
+  const nameById = allTraderNames(raw);
+
+  return rows.map((row) => {
+    const genome = JSON.parse(row.genome_json) as GenomeShape;
+    const parentTraderId = hiredEventParentId(raw, row.id);
+    return {
+      traderId: row.id,
+      name: row.name,
+      cohort: row.cohort,
+      slot: row.slot,
+      status: row.status,
+      bookMc: row.book_mc,
+      symbol: genome.symbol,
+      leverage: genome.leverage,
+      bornAt: row.born_at,
+      diedAt: row.died_at,
+      parentTraderId,
+      parentName: parentTraderId ? nameById.get(parentTraderId) ?? null : null,
+      seedNote: row.seed_note,
+    };
+  });
+}
+
+function computeOrgHistory(raw: BetterSqlite3.Database, currentGenIds: string[]): PalcoSnapshot["org"]["history"] {
+  if (currentGenIds.length === 0) return [];
+
+  const typePlaceholders = ORG_HISTORY_TYPES.map(() => "?").join(", ");
+  const genPlaceholders = currentGenIds.map(() => "?").join(", ");
+  const rows = raw
+    .prepare(
+      `SELECT id, ts, type, payload_json FROM events
+       WHERE type IN (${typePlaceholders}) AND generation_id IN (${genPlaceholders})
+       ORDER BY ts ASC, id ASC`,
+    )
+    .all(...ORG_HISTORY_TYPES, ...currentGenIds) as { id: number; ts: number; type: string; payload_json: string }[];
+
+  return rows.map((row) => {
+    const payload = JSON.parse(row.payload_json) as Record<string, unknown>;
+    return { id: row.id, ts: row.ts, type: row.type, html: formatEventPt(row.type, payload), payload };
+  });
+}
+
+function computeOrg(raw: BetterSqlite3.Database): PalcoSnapshot["org"] {
+  return {
+    hrPolicy: HR_POLICY_PT,
+    employees: computeEmployees(raw),
+    history: computeOrgHistory(raw, currentGenerationIds(raw)),
+  };
 }
 
 export function buildSnapshot(raw: BetterSqlite3.Database, nowMs: number): PalcoSnapshot {
@@ -223,5 +358,6 @@ export function buildSnapshot(raw: BetterSqlite3.Database, nowMs: number): Palco
     equitySeries: computeEquitySeries(raw),
     leaderboard: computeLeaderboard(raw),
     feed: computeFeed(raw),
+    org: computeOrg(raw),
   };
 }
