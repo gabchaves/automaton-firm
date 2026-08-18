@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "vitest";
 import http from "node:http";
-import { mkdtempSync, rmSync } from "fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import { openMotorDb } from "../../motor/db.js";
@@ -105,6 +105,24 @@ describe("startPalcoServer", () => {
       const parsed = JSON.parse(dataLine!.slice("data:".length).trim());
       expect(parsed.cards).toBeDefined();
       expect(parsed.cards.evolvedGen).toBe(1);
+    } finally {
+      await server.close();
+    }
+  });
+
+  test("traversal guard: encoded ../ cannot reach a prefix-sharing sibling of dist", async () => {
+    const dbPath = freshDbPath();
+    const distDir = join(dir!, "dist");
+    const sibling = join(dir!, "dist-secrets"); // shares the "dist" prefix on purpose
+    mkdirSync(distDir);
+    mkdirSync(sibling);
+    writeFileSync(join(distDir, "index.html"), "<html>palco</html>");
+    writeFileSync(join(sibling, "leak.js"), "SECRET_CONTENT");
+
+    const server = (await startPalcoServer({ dbPath, port: 0, distDir })) as PalcoServerHandle;
+    try {
+      const res = await get(server.port, "/..%2Fdist-secrets%2Fleak.js");
+      expect(res.body).not.toContain("SECRET_CONTENT");
     } finally {
       await server.close();
     }

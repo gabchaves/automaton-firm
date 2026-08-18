@@ -93,7 +93,11 @@ function resolveStaticPath(distDir, urlPath) {
   const relative = withoutQuery === "/" ? "index.html" : withoutQuery.replace(/^\/+/, "");
   const filePath = path.join(distDir, relative);
   const distRoot = path.resolve(distDir);
-  if (!path.resolve(filePath).startsWith(distRoot)) return null; // traversal guard
+  // Traversal guard: path.relative never begins with ".." only when the
+  // target is inside distRoot. A bare startsWith(distRoot) would also accept
+  // SIBLINGS whose name shares the prefix (e.g. dist-types/ next to dist/).
+  const rel = path.relative(distRoot, path.resolve(filePath));
+  if (rel === "" || rel.startsWith("..") || path.isAbsolute(rel)) return null;
   return filePath;
 }
 
