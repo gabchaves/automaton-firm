@@ -1,27 +1,46 @@
-/* v1.1 dark-site identity — overrides PrimeReact's lara-dark-green theme
- * tokens LAST (imported after primereact.min.css + primeicons.css in
- * main.tsx). Charcoal ground, green accent, serif display, Verdana
- * small-caps labels, hairline rules — same editorial bones as v1, now on a
- * dark "site-feeling" shell with a sticky top nav instead of a TabView. */
+/* v2 pxpush identity — overrides PrimeReact's lara-dark-green theme tokens
+ * LAST (imported after primereact.min.css + primeicons.css + the
+ * @fontsource imports in main.tsx). Dark brutalist studio look, extracted
+ * from pxpush.com's live CSS: near-black ground, terminal green, huge Anton
+ * condensed headlines, Geist Mono numbers/labels, grey-bg/blue-text chip
+ * labels, hairline white borders, static grain. User ruling (2026-08-17):
+ * "N precisa de tanta animacao" — grain is STATIC; the live-dot pulse is
+ * the one animation kept beyond the existing mural fade-highlight. */
 
 :root {
-  --bg: #141412;
-  --bg-raised: #1c1c19;
-  --ink: #ecebe4;
-  --ink-muted: #8f8d82;
-  --rule: #2c2b27;
-  --green: #58a27a;
-  --green-deep: #2e5c46;
-  --red: #c46a5a;
+  --bg: #1a1a1a; /* page ground */
+  --ink: #bababa; /* primary text (pxpush's --grey/--primarycolor) */
+  --black: #111; /* raised/inset panels */
+  --red: #ff001a; /* losses, deaths, fired */
+  --blue: #03049c; /* chip text, links-on-grey, section tint */
+  --lightblue: #9fe4f3; /* links on dark */
+  --cream: #bab5a6; /* section tint / warm panel */
+  --green: #0f0; /* terminal green: profits, live dot, firm chart */
+  --pink: #a7849d; /* rare tint */
+  --lightgrey: #71737d; /* muted text */
+
+  /* --border/--border-fade are the exact pxpush hairline shorthands; the
+     -color variants exist alongside them for spots that need a bare color
+     (PrimeReact's --surface-border, box-shadow, etc.) instead of a full
+     "1px solid ..." shorthand. */
+  --border-color: hsla(0, 0%, 100%, 0.7);
+  --border-color-fade: hsla(0, 0%, 100%, 0.5);
+  --border: 1px solid var(--border-color);
+  --border-fade: 1px solid var(--border-color-fade);
+  --radius: 0.5vw;
+
+  --font-display: "Anton", Impact, sans-serif;
+  --font-body: "Archivo", Helvetica, Arial, sans-serif;
+  --font-mono: "Geist Mono", Consolas, monospace;
 
   --primary-color: var(--green);
-  --primary-color-text: #0e1712;
+  --primary-color-text: var(--black);
   --surface-ground: var(--bg);
-  --surface-card: var(--bg-raised);
-  --surface-border: var(--rule);
+  --surface-card: var(--black);
+  --surface-border: var(--border-color-fade);
   --text-color: var(--ink);
-  --text-color-secondary: var(--ink-muted);
-  --font-family: Georgia, "Times New Roman", serif;
+  --text-color-secondary: var(--lightgrey);
+  --font-family: var(--font-body);
 }
 
 * {
@@ -38,23 +57,28 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--ink);
-  font: 15px/1.55 Georgia, "Times New Roman", serif;
+  font: 15px/1.55 var(--font-body);
 }
 
-/* Verdana small-caps label used for kickers, section headers, and chips */
+/* Chip label — the signature pxpush pattern: grey background, blue text,
+ * inline-block, no radius. Used for kickers, section captions, hero-card
+ * labels, and counters throughout the shell. */
 .label,
 .small-caps {
-  font-family: Verdana, Geneva, sans-serif;
+  display: inline-block;
+  font-family: var(--font-mono);
   font-size: 10px;
-  letter-spacing: 0.22em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--ink-muted);
+  background: var(--ink);
+  color: var(--blue);
+  padding: 2px 0.6em;
 }
 
 hr,
 .rule {
   border: 0;
-  border-top: 1px solid var(--rule);
+  border-top: var(--border-fade);
   margin: 26px 0;
 }
 
@@ -72,7 +96,7 @@ hr,
 }
 
 .live-dot.disconnected {
-  background: var(--ink-muted);
+  background: var(--lightgrey);
 }
 
 @keyframes pulse {
@@ -85,6 +109,41 @@ hr,
   }
 }
 
+/* Static grain overlay — fixed full-viewport noise via inline SVG
+ * feTurbulence, mix-blend-mode overlay. No @keyframes here: per the user's
+ * "N precisa de tanta animacao" ruling this texture never moves. */
+.page {
+  position: relative;
+}
+
+.page::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  pointer-events: none;
+  opacity: 0.25;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* Boxy buttons/inputs — transparent bg, hairline border, hover inverts to
+ * filled. Base rule for any native control; `.nav-link` below is more
+ * specific and keeps its own mono/underline identity. */
+button,
+input {
+  font-family: var(--font-body);
+  background: transparent;
+  color: var(--ink);
+  border: var(--border-fade);
+  border-radius: 0;
+}
+
+button:hover {
+  background: var(--ink);
+  color: var(--bg);
+}
+
 /* ---------- Site shell: sticky top nav ---------- */
 
 .site-header {
@@ -92,7 +151,7 @@ hr,
   top: 0;
   z-index: 10;
   background: var(--bg);
-  border-bottom: 1px solid var(--rule);
+  border-bottom: var(--border-fade);
 }
 
 .nav-bar {
@@ -113,13 +172,16 @@ hr,
 }
 
 .wordmark .brand {
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: 21px;
+  font-family: var(--font-display);
+  font-size: clamp(28px, 4vw, 48px);
+  line-height: 0.9;
+  letter-spacing: -0.01em;
+  text-transform: uppercase;
   color: var(--ink);
 }
 
 .wordmark .kicker {
-  margin-top: 3px;
+  margin-top: 6px;
 }
 
 .nav-links {
@@ -134,16 +196,17 @@ hr,
   background: none;
   border: none;
   cursor: pointer;
-  font-family: Verdana, Geneva, sans-serif;
+  font-family: var(--font-mono);
   font-size: 11px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--ink-muted);
+  color: var(--lightgrey);
   padding: 8px 2px;
   position: relative;
 }
 
 .nav-link:hover {
+  background: none;
   color: var(--ink);
 }
 
@@ -166,7 +229,8 @@ hr,
   align-items: center;
 }
 
-/* Hero cards strip, under the nav */
+/* Hero cards strip, under the nav — boxy black panels, hairline borders,
+ * values in Geist Mono. */
 .hero-strip {
   max-width: 1100px;
   margin: 0 auto;
@@ -174,14 +238,21 @@ hr,
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 16px 28px;
   padding: 20px clamp(20px, 6vw, 60px) 24px;
-  border-bottom: 1px solid var(--rule);
+  border-bottom: var(--border-fade);
+}
+
+.hero-card {
+  background: var(--black);
+  border: var(--border-fade);
+  padding: 14px 16px;
 }
 
 .hero-card .label {
-  margin-bottom: 4px;
+  margin-bottom: 6px;
 }
 
 .hero-card .v {
+  font-family: var(--font-mono);
   font-size: 26px;
   color: var(--green);
   font-variant-numeric: tabular-nums;
@@ -189,13 +260,14 @@ hr,
 
 .hero-card .v small {
   font-size: 14px;
-  color: var(--ink-muted);
+  color: var(--lightgrey);
   font-weight: normal;
 }
 
 .hero-card .d {
+  font-family: var(--font-mono);
   font-size: 12px;
-  color: var(--ink-muted);
+  color: var(--lightgrey);
 }
 
 .page-content {
@@ -204,20 +276,22 @@ hr,
   padding: 28px clamp(20px, 6vw, 60px) 60px;
 }
 
-/* Honesty footer, always visible below the content */
+/* Honesty footer — accent section tint on --blue, per the identity plan's
+ * "one accent section on --blue with --ink text" pattern. */
 footer.honesty {
   max-width: 1100px;
   margin: 0 auto;
   padding: 18px clamp(20px, 6vw, 60px) 48px;
-  border-top: 1px solid var(--rule);
-  font-size: 11.5px;
-  color: var(--ink-muted);
-  font-style: italic;
 }
 
 footer.honesty p {
   max-width: 78ch;
   margin: 0;
+  padding: 14px clamp(20px, 6vw, 60px);
+  background: var(--blue);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
 }
 
 /* ---------- Genome chips (Empresa) ---------- */
@@ -229,20 +303,19 @@ footer.honesty p {
 }
 
 .genome-chips .chip {
-  font-family: Verdana, Geneva, sans-serif;
+  font-family: var(--font-mono);
   font-size: 10.5px;
   letter-spacing: 0.02em;
-  color: var(--ink-muted);
-  background: var(--bg);
-  border: 1px solid var(--rule);
-  border-radius: 999px;
+  color: var(--lightgrey);
+  background: var(--black);
+  border: var(--border-fade);
   padding: 3px 9px;
   white-space: nowrap;
 }
 
 .genome-chips .chip-desk {
   color: var(--green);
-  border-color: var(--green-deep);
+  border-color: var(--green);
 }
 
 .genome-chips--compact .chip {
@@ -255,7 +328,7 @@ footer.honesty p {
 .mural-disclaimer {
   margin: 0 0 14px;
   font-size: 11px;
-  color: var(--ink-muted);
+  color: var(--lightgrey);
   font-style: italic;
 }
 
@@ -272,9 +345,8 @@ li.mural-post {
   display: flex;
   gap: 12px;
   padding: 14px 16px;
-  background: var(--bg-raised);
-  border: 1px solid var(--rule);
-  border-radius: 10px;
+  background: var(--black);
+  border: var(--border-fade);
 }
 
 .post-avatar {
@@ -285,7 +357,7 @@ li.mural-post {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: Verdana, Geneva, sans-serif;
+  font-family: var(--font-mono);
   font-size: 12px;
   font-weight: bold;
   color: var(--ink);
@@ -304,23 +376,23 @@ li.mural-post {
 }
 
 .author-name {
-  font-weight: bold;
+  font-weight: 500;
   color: var(--ink);
 }
 
 .author-cargo {
-  font-family: Verdana, Geneva, sans-serif;
+  font-family: var(--font-mono);
   font-size: 10px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--ink-muted);
+  color: var(--lightgrey);
 }
 
 .post-ts {
   margin-left: auto;
-  font-family: Verdana, Geneva, sans-serif;
+  font-family: var(--font-mono);
   font-size: 10px;
-  color: var(--ink-muted);
+  color: var(--lightgrey);
   white-space: nowrap;
 }
 
@@ -340,9 +412,9 @@ li.mural-post {
 .post-reason {
   margin: 8px 0 0;
   padding-left: 10px;
-  border-left: 2px solid var(--rule);
+  border-left: 2px solid var(--border-color-fade);
   font-size: 12px;
-  color: var(--ink-muted);
+  color: var(--lightgrey);
   font-style: italic;
 }
 
@@ -354,8 +426,8 @@ li.mural-post {
 
 .reaction {
   font-size: 12px;
-  color: var(--ink-muted);
-  font-family: Verdana, Geneva, sans-serif;
+  color: var(--lightgrey);
+  font-family: var(--font-mono);
 }
 
 .fade-highlight {
@@ -364,25 +436,24 @@ li.mural-post {
 
 @keyframes fadeHighlight {
   from {
-    background: rgba(88, 162, 122, 0.2);
+    background: rgba(15, 255, 0, 0.15);
   }
   to {
-    background: var(--bg-raised);
+    background: var(--black);
   }
 }
 
 /* ---------- Empresa ---------- */
 
 .rh-card {
-  background: var(--bg-raised);
-  border: 1px solid var(--rule);
-  border-radius: 10px;
+  background: var(--black);
+  border: var(--border-fade);
   padding: 18px 20px;
   margin-bottom: 28px;
 }
 
 .rh-policy {
-  color: var(--ink-muted);
+  color: var(--lightgrey);
   font-style: italic;
   max-width: 72ch;
   margin: 8px 0 14px;
@@ -395,6 +466,7 @@ li.mural-post {
 }
 
 .rh-counters .v {
+  font-family: var(--font-mono);
   font-size: 22px;
   color: var(--green);
   font-variant-numeric: tabular-nums;
@@ -402,7 +474,7 @@ li.mural-post {
 
 .rh-counters .label {
   display: block;
-  margin-top: 2px;
+  margin-top: 6px;
 }
 
 .org-columns {
@@ -425,9 +497,8 @@ li.mural-post {
 .employee-card {
   display: flex;
   gap: 12px;
-  background: var(--bg-raised);
-  border: 1px solid var(--rule);
-  border-radius: 10px;
+  background: var(--black);
+  border: var(--border-fade);
   padding: 12px 14px;
   margin-bottom: 10px;
 }
@@ -440,7 +511,7 @@ li.mural-post {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: Verdana, Geneva, sans-serif;
+  font-family: var(--font-mono);
   font-size: 11px;
   font-weight: bold;
   color: var(--ink);
@@ -459,42 +530,42 @@ li.mural-post {
 }
 
 .employee-name {
-  font-weight: bold;
+  font-weight: 500;
   color: var(--ink);
 }
 
 .employee-cargo {
-  font-family: Verdana, Geneva, sans-serif;
+  font-family: var(--font-mono);
   font-size: 10px;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: var(--ink-muted);
+  color: var(--lightgrey);
 }
 
 .employee-book {
   margin-top: 2px;
+  font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
   font-size: 13px;
   color: var(--ink);
 }
 
 .status-chip {
-  font-family: Verdana, Geneva, sans-serif;
+  font-family: var(--font-mono);
   font-size: 9.5px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   padding: 2px 8px;
-  border-radius: 999px;
-  border: 1px solid var(--rule);
+  border: var(--border-fade);
 }
 
 .status-live {
   color: var(--green);
-  border-color: var(--green-deep);
+  border-color: var(--green);
 }
 
 .status-dead {
-  color: var(--ink-muted);
+  color: var(--lightgrey);
 }
 
 .status-fired {
@@ -505,7 +576,7 @@ li.mural-post {
 .lineage-line {
   margin-top: 6px;
   font-size: 11.5px;
-  color: var(--ink-muted);
+  color: var(--lightgrey);
   font-style: italic;
 }
 
@@ -524,7 +595,7 @@ ul.history-timeline li {
   align-items: baseline;
   gap: 10px;
   padding: 8px 0;
-  border-bottom: 1px solid var(--rule);
+  border-bottom: var(--border-fade);
   font-size: 13px;
 }
 
@@ -534,16 +605,16 @@ ul.history-timeline li {
 
 .history-ts {
   margin-left: auto;
-  font-family: Verdana, Geneva, sans-serif;
+  font-family: var(--font-mono);
   font-size: 10px;
-  color: var(--ink-muted);
+  color: var(--lightgrey);
   white-space: nowrap;
 }
 
 /* ---------- Gerações ---------- */
 
 .gen-explainer {
-  color: var(--ink-muted);
+  color: var(--lightgrey);
   font-style: italic;
   max-width: 76ch;
   margin: 12px 0 22px;
@@ -557,9 +628,8 @@ ul.history-timeline li {
 }
 
 .gen-card {
-  background: var(--bg-raised);
-  border: 1px solid var(--rule);
-  border-radius: 10px;
+  background: var(--black);
+  border: var(--border-fade);
   padding: 14px 18px;
 }
 
@@ -571,13 +641,14 @@ ul.history-timeline li {
 }
 
 .gen-card-title {
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: var(--font-body);
+  font-weight: 500;
   font-size: 16px;
   color: var(--ink);
 }
 
 .gen-card .peak {
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: var(--font-body);
   font-size: 30px;
   color: var(--green);
   margin: 4px 0;
@@ -585,7 +656,7 @@ ul.history-timeline li {
 }
 
 .gen-record-badge {
-  font-family: Verdana, Geneva, sans-serif;
+  font-family: var(--font-mono);
   font-size: 10.5px;
   color: var(--green);
   letter-spacing: 0.04em;
@@ -593,8 +664,7 @@ ul.history-timeline li {
 
 .gen-progress {
   height: 4px;
-  background: var(--rule);
-  border-radius: 2px;
+  background: var(--border-color-fade);
   overflow: hidden;
   margin-top: 10px;
 }
@@ -614,7 +684,7 @@ ul.trade-feed {
 
 ul.trade-feed li {
   padding: 9px 0 9px 10px;
-  border-bottom: 1px solid var(--rule);
+  border-bottom: var(--border-fade);
   border-left: 3px solid transparent;
   font-size: 13.5px;
 }
@@ -628,32 +698,32 @@ ul.trade-feed li.pnl-neg {
 }
 
 ul.trade-feed .ts {
-  font-family: Verdana, Geneva, sans-serif;
+  font-family: var(--font-mono);
   font-size: 10px;
-  color: var(--ink-muted);
+  color: var(--lightgrey);
   margin-right: 10px;
 }
 
 .chart-legend {
   font-size: 11.5px;
-  color: var(--ink-muted);
+  color: var(--lightgrey);
   margin-top: 6px;
 }
 
 /* ---------- PrimeReact widget dark harmonization ---------- */
 
 .p-tag {
-  font-family: Verdana, Geneva, sans-serif;
+  font-family: var(--font-mono);
   font-size: 9.5px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
 .p-datatable .p-datatable-thead > tr > th {
-  background: transparent;
-  border-color: var(--rule);
-  color: var(--ink-muted);
-  font-family: Verdana, Geneva, sans-serif;
+  background: var(--ink);
+  border-color: var(--border-color-fade);
+  color: var(--blue);
+  font-family: var(--font-mono);
   font-size: 9.5px;
   letter-spacing: 0.18em;
   text-transform: uppercase;
@@ -661,12 +731,12 @@ ul.trade-feed .ts {
 }
 
 .p-datatable .p-datatable-tbody > tr {
-  background: var(--bg-raised);
+  background: var(--black);
   color: var(--ink);
 }
 
 .p-datatable .p-datatable-tbody > tr > td {
-  border-color: var(--rule);
+  border-color: var(--border-color-fade);
   font-size: 13.5px;
 }
 
