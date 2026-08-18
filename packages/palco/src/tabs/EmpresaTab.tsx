@@ -103,10 +103,10 @@ export function EmpresaTab({ snapshot }: EmpresaTabProps) {
   // org.employees only exposes {symbol, leverage} — not the full genome
   // struct with its gene list. snapshot.leaderboard, however, pulls from
   // the exact same current-generation trader set and DOES carry the full
-  // structured genome. Cross-referencing by name lets Empresa show real
-  // GenomeChips without any Task A data-layer change.
-  const genomeByName = new Map<string, PalcoGenome>(
-    (snapshot?.leaderboard ?? []).map((trader) => [trader.name, trader.genome]),
+  // structured genome. traderId is the collision-free join key — generated
+  // names can repeat within a generation's accumulated hires.
+  const genomeById = new Map<string, PalcoGenome>(
+    (snapshot?.leaderboard ?? []).map((trader) => [trader.traderId, trader.genome]),
   );
 
   const firmEmployees = employees.filter((e) => e.cohort === "evolved");
@@ -137,14 +137,14 @@ export function EmpresaTab({ snapshot }: EmpresaTabProps) {
           <h3 className="label">A Firma</h3>
           {firmEmployees.length === 0 && <p>Sem funcionários ainda.</p>}
           {firmEmployees.map((employee) => (
-            <EmployeeCard key={employee.traderId} employee={employee} genome={genomeByName.get(employee.name)} />
+            <EmployeeCard key={employee.traderId} employee={employee} genome={genomeById.get(employee.traderId)} />
           ))}
         </div>
         <div className="org-column">
           <h3 className="label">Controle</h3>
           {controlEmployees.length === 0 && <p>Sem funcionários ainda.</p>}
           {controlEmployees.map((employee) => (
-            <EmployeeCard key={employee.traderId} employee={employee} genome={genomeByName.get(employee.name)} />
+            <EmployeeCard key={employee.traderId} employee={employee} genome={genomeById.get(employee.traderId)} />
           ))}
         </div>
       </div>

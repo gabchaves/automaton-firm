@@ -44,6 +44,7 @@ export interface PalcoSnapshot {
   }>; // records chart, both cohorts
   equitySeries: { evolved: [number, number][]; random: [number, number][] }; // [ts, mc], ~400 pts
   leaderboard: Array<{
+    traderId: string;
     name: string;
     cohort: string;
     genNumber: number;

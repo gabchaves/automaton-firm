@@ -26,7 +26,7 @@ export interface PalcoSnapshot {
   }>; // records chart, both cohorts
   equitySeries: { evolved: [number, number][]; random: [number, number][] }; // [ts, mc], ~400 pts
   leaderboard: Array<{
-    name: string; cohort: string; genNumber: number;
+    traderId: string; name: string; cohort: string; genNumber: number;
     status: string; bookMc: number; realizedPnlMc: number; tradesCount: number;
     symbol: string; leverage: number; genes: string; combinator: string;
     genome: {
@@ -225,6 +225,7 @@ function computeLeaderboard(raw: BetterSqlite3.Database): PalcoSnapshot["leaderb
   return rows.map((row) => {
     const genome = JSON.parse(row.genome_json) as GenomeShape;
     return {
+      traderId: row.id,
       name: row.name,
       cohort: row.cohort,
       genNumber: row.gen_number,

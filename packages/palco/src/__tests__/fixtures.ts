@@ -55,6 +55,7 @@ export const fixtureSnapshot: PalcoSnapshot = {
   },
   leaderboard: [
     {
+      traderId: "t-ada",
       name: "Ada Faria",
       cohort: "evolved",
       genNumber: 3,
@@ -79,6 +80,7 @@ export const fixtureSnapshot: PalcoSnapshot = {
       achievements: ["Primeira semana viva", "Dobrou o book"],
     },
     {
+      traderId: "t-rand7",
       name: "Rand-7",
       cohort: "random",
       genNumber: 3,
