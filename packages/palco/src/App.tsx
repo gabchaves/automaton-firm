@@ -7,6 +7,7 @@ import { LeaderboardTab } from "./tabs/LeaderboardTab";
 import { GeracoesTab } from "./tabs/GeracoesTab";
 import { EmpresaTab } from "./tabs/EmpresaTab";
 import { MuralTab } from "./tabs/MuralTab";
+import { SobreTab } from "./tabs/SobreTab";
 
 const VIRGIN_DAYS_GATE = 90;
 const DEFAULT_EQUITY_MC = 10_000_000; // $100.00, matches the Motor's seed equity
@@ -21,7 +22,7 @@ function formatOneDecimal(n: number): string {
   return n.toFixed(1);
 }
 
-type Route = "pregao" | "leaderboard" | "empresa" | "geracoes" | "mural";
+type Route = "pregao" | "leaderboard" | "empresa" | "geracoes" | "mural" | "sobre";
 
 // LMArena-style ranked Leaderboard is a named product identity anchor —
 // it stays alongside Empresa's org chart (ranking vs. structure), not
@@ -32,6 +33,7 @@ const NAV_ITEMS: Array<{ route: Route; label: string }> = [
   { route: "empresa", label: "Empresa" },
   { route: "geracoes", label: "Gerações" },
   { route: "mural", label: "Mural" },
+  { route: "sobre", label: "Sobre" },
 ];
 
 export default function App() {
@@ -123,6 +125,7 @@ export default function App() {
         {route === "empresa" && <EmpresaTab snapshot={snapshot} />}
         {route === "geracoes" && <GeracoesTab snapshot={snapshot} />}
         {route === "mural" && <MuralTab snapshot={snapshot} />}
+        {route === "sobre" && <SobreTab snapshot={snapshot} />}
       </main>
 
       <footer className="honesty">

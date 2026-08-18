@@ -1402,3 +1402,84 @@ ul.trade-feed .ts {
   color: var(--green);
   font-size: 13px;
 }
+
+/* ---------- Sobre (v3.1: quem constrói + o projeto) ---------- */
+/* The pxpush "about page" register: big confident type, generous
+ * editorial spacing, chips + hairlines — not a dense dashboard panel like
+ * the rest of the shell. */
+
+.sobre-page {
+  max-width: 860px;
+  margin: 0 auto;
+}
+
+.sobre-section {
+  padding: 12px 0 36px;
+}
+
+.sobre-name {
+  font-family: var(--font-display);
+  font-size: clamp(36px, 6vw, 72px);
+  line-height: 0.92;
+  text-transform: uppercase;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  margin: 10px 0 10px;
+}
+
+.sobre-role-chip {
+  margin: 0 0 18px;
+}
+
+.sobre-bio {
+  max-width: 68ch;
+  font-size: 15px;
+  line-height: 1.6;
+  margin: 0 0 20px;
+}
+
+.sobre-contact {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--lightgrey);
+  margin-top: 18px;
+}
+
+.sobre-contact a {
+  color: var(--green);
+}
+
+.sobre-lead {
+  font-size: clamp(18px, 2.2vw, 24px);
+  line-height: 1.4;
+  max-width: 68ch;
+  margin: 10px 0 24px;
+  color: var(--ink);
+}
+
+.sobre-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 20px;
+  margin: 0 0 28px;
+}
+
+.sobre-fact {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--green);
+  border: var(--border-fade);
+  padding: 6px 12px;
+}
+
+.sobre-paragraph {
+  max-width: 68ch;
+  font-size: 14.5px;
+  line-height: 1.65;
+  color: var(--ink);
+  margin: 0 0 16px;
+}
+
+.sobre-footer-chip {
+  margin-top: 12px;
+}

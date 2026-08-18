@@ -33,13 +33,13 @@ describe("App", () => {
     vi.unstubAllGlobals();
   });
 
-  it("renders the wordmark, kicker, and the 5-link site nav", async () => {
+  it("renders the wordmark, kicker, and the 6-link site nav", async () => {
     render(<App />);
 
     expect(await screen.findByText("A Firma")).toBeInTheDocument();
     expect(screen.getByText(/Automaton · pesquisa de trading/i)).toBeInTheDocument();
 
-    for (const label of ["Pregão", "Leaderboard", "Empresa", "Gerações", "Mural"]) {
+    for (const label of ["Pregão", "Leaderboard", "Empresa", "Gerações", "Mural", "Sobre"]) {
       expect(screen.getByRole("button", { name: label })).toBeInTheDocument();
     }
   });
@@ -68,6 +68,18 @@ describe("App", () => {
     expect(screen.getByText(/reações são decorativas/i)).toBeInTheDocument();
     expect(screen.queryByTestId("line-chart-stub")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Mural" })).toHaveAttribute("aria-current", "page");
+  });
+
+  it("switches to the Sobre route and renders the builder + project copy", async () => {
+    render(<App />);
+
+    expect(await screen.findByTestId("line-chart-stub")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Sobre" }));
+
+    expect(screen.getByText("Gabriel Ernesto Chaves")).toBeInTheDocument();
+    expect(screen.queryByTestId("line-chart-stub")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Sobre" })).toHaveAttribute("aria-current", "page");
   });
 
   it("shows the honesty footer verbatim", async () => {
