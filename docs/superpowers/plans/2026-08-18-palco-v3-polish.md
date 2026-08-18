@@ -60,3 +60,11 @@ The centerpiece. Inside the dark page, the Mural becomes a light retro inset —
 Per task: in-package tests updated (content assertions never weakened; new: graph renders fixture nodes, scraps render author + body, positions panel from inPosition fixture), `pnpm --filter @conway/palco test` + `build` green, root `tsc --noEmit` clean (Task 0 also `npx vitest run src/__tests__/motor`). Final: rebuild, verify served page + snapshot, one light review pass (XSS posture, deps bundled — no CDN, determinism untouched), controller fixes, done.
 
 Commits: one per task (0..5), conventional, Opus trailer.
+
+## Addendum: fun pass (user, mid-plan: "talvez deixar um pouco mais divertido tbm no que der")
+
+Cross-cutting, deterministic, cheap — sprinkle where it fits:
+- **Humores**: mood emoji next to trader names (leaderboard + graph nodes): 😎 book >= 105% do stake, 🙂 normal, 😬 95-100%, 😰 < 95%, 💀 morto, 📦 demitido.
+- **Mural Orkut garnish**: fake visitor counter in the panel footer ("você é o visitante nº N" — N derived from lastEventId, zero-padded), and a decorative "comunidades" box with 3 trading-joke communities e.g. "Eu amo taxa de funding (12 membros)", "Perdi tudo no 3x alavancado (5.021 membros)", "RH me demitiu por evidência (1 membro)".
+- **Empty states com voz**: "ninguém posicionado — a firma espera sinal", "nenhuma demissão ainda — o RH observa em silêncio".
+- Never fake DATA (numbers about money/records stay real); fun is copy + decoration only.
