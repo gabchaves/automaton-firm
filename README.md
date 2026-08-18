@@ -104,6 +104,14 @@ run live. `pnpm motor:status` prints a snapshot. To keep it running across
 logins on Windows, register `pnpm motor` in Task Scheduler at logon with
 "restart on failure" — correctness never depends on uptime.
 
+### Palco: realtime front for the Motor
+
+`pnpm palco:build` once to build the React/PrimeReact front, then run `pnpm
+motor` and `pnpm palco` side by side and open `http://localhost:4242` for a
+live view of equity, generations, leaderboard, and the event mural. Palco
+reads `~/.automaton/motor.db` read-only over SSE — it never writes. For
+frontend iteration, `pnpm palco:dev` runs the Vite dev server instead.
+
 ## Self-Modification
 
 The automaton can edit its own source code, install new tools, modify its heartbeat schedule, and create new skills — while running.
