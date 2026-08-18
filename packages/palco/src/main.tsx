@@ -1,10 +1,10 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import "primereact/resources/themes/lara-light-green/theme.css";
+import "primereact/resources/themes/lara-dark-green/theme.css";
 import "primereact/resources/primereact.min.css";
 import "primeicons/primeicons.css";
-// Harvey overrides LAST — must load after the PrimeReact theme/base CSS so
-// the token overrides win.
+// v1.1 dark-site overrides LAST — must load after the PrimeReact theme/base
+// CSS so the token overrides win.
 import "./theme.css";
 import App from "./App";
 

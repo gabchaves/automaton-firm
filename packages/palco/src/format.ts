@@ -8,3 +8,21 @@ export function usd(mc: number): string {
 export function dateShort(ts: number): string {
   return new Date(ts).toISOString().slice(5, 16).replace("T", " ");
 }
+
+const MINUTE_MS = 60_000;
+const HOUR_MS = 3_600_000;
+const DAY_MS = 86_400_000;
+
+/** Relative time string for the Mural/Empresa feeds. Pure function of
+ * (ts, nowMs) — no Date.now() inside, same pattern as the Motor's
+ * buildSnapshot(raw, nowMs): the caller supplies "now" so this stays
+ * testable and has one clear source of non-determinism. */
+export function relativeTime(ts: number, nowMs: number): string {
+  const diffMs = Math.max(0, nowMs - ts);
+  if (diffMs < MINUTE_MS) return "agora mesmo";
+  if (diffMs < HOUR_MS) return `há ${Math.floor(diffMs / MINUTE_MS)} min`;
+  if (diffMs < DAY_MS) return `há ${Math.floor(diffMs / HOUR_MS)} h`;
+  const days = Math.floor(diffMs / DAY_MS);
+  if (days === 1) return "ontem";
+  return `há ${days} d`;
+}
