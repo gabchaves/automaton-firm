@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useSnapshot } from "./useSnapshot";
 import { usd } from "./format";
+import { AnimatedValue } from "./AnimatedValue";
 import { PregaoTab } from "./tabs/PregaoTab";
 import { LeaderboardTab } from "./tabs/LeaderboardTab";
 import { GeracoesTab } from "./tabs/GeracoesTab";
@@ -9,6 +10,16 @@ import { MuralTab } from "./tabs/MuralTab";
 
 const VIRGIN_DAYS_GATE = 90;
 const DEFAULT_EQUITY_MC = 10_000_000; // $100.00, matches the Motor's seed equity
+
+// Formatters for AnimatedValue's non-money hero numbers (money ones reuse
+// `usd` directly).
+function formatCount(n: number): string {
+  return Math.round(n).toString();
+}
+
+function formatOneDecimal(n: number): string {
+  return n.toFixed(1);
+}
 
 type Route = "pregao" | "leaderboard" | "empresa" | "geracoes" | "mural";
 
@@ -60,12 +71,16 @@ export default function App() {
         <section className="hero-strip">
           <div className="hero-card">
             <div className="label">Equity da firma</div>
-            <div className="v">{usd(cards?.evolvedEquityMc ?? DEFAULT_EQUITY_MC)}</div>
+            <div className="v">
+              <AnimatedValue value={cards?.evolvedEquityMc ?? DEFAULT_EQUITY_MC} format={usd} />
+            </div>
             <div className="d">Geração {cards?.evolvedGen ?? "–"}</div>
           </div>
           <div className="hero-card">
             <div className="label">Controle aleatório</div>
-            <div className="v">{usd(cards?.randomEquityMc ?? DEFAULT_EQUITY_MC)}</div>
+            <div className="v">
+              <AnimatedValue value={cards?.randomEquityMc ?? DEFAULT_EQUITY_MC} format={usd} />
+            </div>
             <div className="d">Geração {cards?.randomGen ?? "–"}</div>
           </div>
           <div className="hero-card">
@@ -75,19 +90,28 @@ export default function App() {
           </div>
           <div className="hero-card">
             <div className="label">Recorde (pico)</div>
-            <div className="v">{usd(cards?.recordEvolvedMc ?? 0)}</div>
-            <div className="d">controle: {usd(cards?.recordRandomMc ?? 0)}</div>
+            <div className="v">
+              <AnimatedValue value={cards?.recordEvolvedMc ?? 0} format={usd} />
+            </div>
+            <div className="d">
+              controle: <AnimatedValue value={cards?.recordRandomMc ?? 0} format={usd} />
+            </div>
           </div>
           <div className="hero-card">
             <div className="label">Gerações vividas</div>
             <div className="v">
-              {cards?.gensEvolved ?? 0} <small>/ {cards?.gensRandom ?? 0}</small>
+              <AnimatedValue value={cards?.gensEvolved ?? 0} format={formatCount} />{" "}
+              <small>
+                / <AnimatedValue value={cards?.gensRandom ?? 0} format={formatCount} />
+              </small>
             </div>
             <div className="d">firma / controle</div>
           </div>
           <div className="hero-card">
             <div className="label">Dados virgens</div>
-            <div className="v">{(cards?.virginDays ?? 0).toFixed(1)}</div>
+            <div className="v">
+              <AnimatedValue value={cards?.virginDays ?? 0} format={formatOneDecimal} />
+            </div>
             <div className="d">de {VIRGIN_DAYS_GATE} dias</div>
           </div>
         </section>

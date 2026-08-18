@@ -5,6 +5,13 @@ export function usd(mc: number): string {
   return `$${(mc / 100_000).toFixed(2)}`;
 }
 
+/** Formats a raw price-in-cents field (e.g. `entryPriceCents`, matching the
+ * Motor's `priceCents` payload convention) to a dollar string. Distinct
+ * from `usd()`, which divides milli-cents — do not mix the two units. */
+export function centsToUsd(cents: number): string {
+  return `$${(cents / 100).toFixed(2)}`;
+}
+
 export function dateShort(ts: number): string {
   return new Date(ts).toISOString().slice(5, 16).replace("T", " ");
 }

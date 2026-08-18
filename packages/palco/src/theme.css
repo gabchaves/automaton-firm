@@ -776,6 +776,111 @@ ul.history-timeline li {
 
 /* ---------- Pregão ---------- */
 
+/* Right-sized layout: chart takes ~62% width on desktop, positions +
+ * trades stack in the remaining column; single column on mobile. */
+.pregao-grid {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr;
+  gap: 24px;
+}
+
+@media (max-width: 860px) {
+  .pregao-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.pregao-chart-panel {
+  min-width: 0;
+}
+
+/* chart.js's maintainAspectRatio:false fills whatever height this wrapper
+ * gets — capped at 320px per the v3 plan's Task 1 ("the graph is too big"). */
+.chart-frame {
+  position: relative;
+  height: 320px;
+  max-height: 320px;
+}
+
+.pregao-side {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  min-width: 0;
+}
+
+.positions-panel,
+.trades-panel {
+  background: var(--black);
+  border: var(--border-fade);
+  padding: 14px 16px;
+}
+
+.empty-state {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--lightgrey);
+  font-style: italic;
+  margin: 0;
+}
+
+ul.positions-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.position-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: var(--border-fade);
+}
+
+.position-row:last-child {
+  border-bottom: none;
+}
+
+.position-who {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.position-name {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.position-mesa {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--lightgrey);
+}
+
+.position-entry,
+.position-book {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+
+.chip-long {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--green);
+  border: 1px solid var(--green);
+  padding: 2px 7px;
+  white-space: nowrap;
+}
+
 ul.trade-feed {
   list-style: none;
   margin: 0;
