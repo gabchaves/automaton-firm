@@ -31,8 +31,8 @@ import type { MotorDb } from "./db.js";
 import type { MotorEventDraft } from "./events.js";
 
 export const HR_WINDOW_MS = 7 * 24 * 3_600_000;
-export const MOTOR_HR_CONFIG: HrConfig = { minTradesForEvidence: 5, excessBandCents: 25 };
-export const MIN_HIRE_STAKE_MC = 100_000; // $1.00 — below this the reserve just waits
+export const MOTOR_HR_CONFIG: HrConfig = { minTradesForEvidence: 5, excessBandCents: 250 };
+export const MIN_HIRE_STAKE_MC = 1_000_000; // $10.00 — below this the reserve just waits
 
 // The label lives in achievements.ts (ACHIEVEMENT_LABELS.beat_benchmark, Task 9).
 // Kept as a literal here so this module has no dependency on achievements.ts;

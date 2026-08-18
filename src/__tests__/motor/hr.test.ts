@@ -42,11 +42,11 @@ describe("runHrReview", () => {
     flatRandomSnapshots(d, random, 0);
     const loser = evolved.traders[0];
     d.insertTraderSnapshot(0, loser.id, TRADER_START_MC);
-    // book collapsed from $2.00 to $1.00 with plenty of trades: clear underperform
+    // book collapsed from $20.00 to $10.00 with plenty of trades: clear underperform
     const bled = {
       ...evolved,
       traders: evolved.traders.map((t, i) =>
-        i === 0 ? { ...t, step: { ...t.step, cashMc: 100_000 } } : t),
+        i === 0 ? { ...t, step: { ...t.step, cashMc: 1_000_000 } } : t),
     };
     for (let k = 0; k < MOTOR_HR_CONFIG.minTradesForEvidence; k++) {
       d.insertEvent({ ts: 1000 + k, type: "trade_closed", traderId: loser.id, generationId: "ge", payloadJson: "{}" });
@@ -60,16 +60,16 @@ describe("runHrReview", () => {
     expect(result.events.some((e) => e.type === "trader_fired")).toBe(true);
     const hired = result.events.find((e) => e.type === "trader_hired");
     expect(hired).toBeDefined();
-    expect((hired!.payload as { stakeMc: number }).stakeMc).toBe(100_000);
+    expect((hired!.payload as { stakeMc: number }).stakeMc).toBe(1_000_000);
     // Lineage must survive into the event: the mutant's parent is a live trader.
     const parentTraderId = (hired!.payload as { parentTraderId: string | null }).parentTraderId;
     expect(result.evolved.traders.some((t) => t.id === parentTraderId && t.status === "live")).toBe(true);
     expect(result.evolved.traders.filter((t) => t.status === "live").length).toBe(5);
     expect(result.events.some((e) => e.type === "hr_review")).toBe(true);
     // Money conservation: firing + hiring moves capital, never duplicates it.
-    // 4 untouched books + the fired trader's $1.00 (now staked in the hire),
+    // 4 untouched books + the fired trader's $10.00 (now staked in the hire),
     // fired trader zeroed, reserve emptied — exactly what existed before.
-    expect(firmEquityMc(result.evolved, new Map())).toBe(4 * TRADER_START_MC + 100_000);
+    expect(firmEquityMc(result.evolved, new Map())).toBe(4 * TRADER_START_MC + 1_000_000);
   });
 
   test("insufficient evidence is NEVER fired: zero trades and a quiet benchmark hold", () => {
@@ -93,7 +93,7 @@ describe("runHrReview", () => {
     const richer = {
       ...evolved,
       traders: evolved.traders.map((t, i) =>
-        i === 0 ? { ...t, step: { ...t.step, cashMc: 250_000 } } : t),
+        i === 0 ? { ...t, step: { ...t.step, cashMc: 2_500_000 } } : t),
     };
     for (let k = 0; k < MOTOR_HR_CONFIG.minTradesForEvidence; k++) {
       d.insertEvent({ ts: 1000 + k, type: "trade_closed", traderId: star.id, generationId: "ge", payloadJson: "{}" });

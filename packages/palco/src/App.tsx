@@ -8,7 +8,7 @@ import { EmpresaTab } from "./tabs/EmpresaTab";
 import { MuralTab } from "./tabs/MuralTab";
 
 const VIRGIN_DAYS_GATE = 90;
-const DEFAULT_EQUITY_MC = 1_000_000; // $10.00, matches the Motor's seed equity
+const DEFAULT_EQUITY_MC = 10_000_000; // $100.00, matches the Motor's seed equity
 
 type Route = "pregao" | "leaderboard" | "empresa" | "geracoes" | "mural";
 
@@ -70,7 +70,7 @@ export default function App() {
           </div>
           <div className="hero-card">
             <div className="label">Não fazer nada</div>
-            <div className="v">$10.00</div>
+            <div className="v">$100.00</div>
             <div className="d">o piso honesto</div>
           </div>
           <div className="hero-card">

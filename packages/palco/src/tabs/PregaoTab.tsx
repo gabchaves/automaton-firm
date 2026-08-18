@@ -20,7 +20,7 @@ const MUTED_TEXT = "#71737d";
 const BASELINE_HAIRLINE = "hsla(0, 0%, 100%, 0.35)";
 const GRID_HAIRLINE = "hsla(0, 0%, 100%, 0.08)";
 const MONO_FONT = "'Geist Mono', Consolas, monospace";
-const BASELINE_USD = 10;
+const BASELINE_USD = 100;
 const MAX_TRADE_ITEMS = 12;
 
 interface PregaoTabProps {
@@ -71,7 +71,7 @@ export function PregaoTab({ snapshot }: PregaoTabProps) {
         tension: 0.15,
       },
       {
-        label: "$10 parado",
+        label: "$100 parado",
         data: [
           { x: minTs, y: BASELINE_USD },
           { x: maxTs, y: BASELINE_USD },

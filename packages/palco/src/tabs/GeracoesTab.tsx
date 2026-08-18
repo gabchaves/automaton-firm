@@ -32,7 +32,7 @@ ChartJS.register(
 // pxpush identity chart palette — mirrors theme.css's --green/--lightgrey
 // tokens (chart.js reads plain CSS color strings, not custom properties,
 // so these are kept in sync by hand). Per the plan: firm curve is
-// terminal green, control is dashed lightgrey, the $10 baseline is a
+// terminal green, control is dashed lightgrey, the $100 baseline is a
 // faint dashed white hairline.
 const FIRM_GREEN = "#0f0";
 const CONTROL_GREY = "#71737d";
@@ -40,7 +40,7 @@ const BASELINE_HAIRLINE = "hsla(0, 0%, 100%, 0.35)";
 const MUTED_TEXT = "#71737d";
 const GRID_HAIRLINE = "hsla(0, 0%, 100%, 0.08)";
 const MONO_FONT = "'Geist Mono', Consolas, monospace";
-const BASELINE_USD = 10;
+const BASELINE_USD = 100;
 
 // 5-minute bars — same constant as src/motor/feed.ts's BAR_MS. Not exposed
 // on PalcoSnapshot.generations, so "dias vividos" is approximated from
@@ -53,7 +53,7 @@ interface GeracoesTabProps {
 }
 
 const EXPLAINER =
-  "Cada barra é o pico que uma geração de $10 alcançou antes de morrer. Verde = firma; cinza = controle. Se a firma evolui de verdade, as barras verdes sobem com o tempo.";
+  "Cada barra é o pico que uma geração de $100 alcançou antes de morrer. Verde = firma; cinza = controle. Se a firma evolui de verdade, as barras verdes sobem com o tempo.";
 
 function daysLivedFrom(barsLived: number): string {
   return ((barsLived * BAR_MS) / MS_PER_DAY).toFixed(1);
@@ -95,7 +95,7 @@ export function GeracoesTab({ snapshot }: GeracoesTabProps) {
       <h2 className="section-title">Recorde por geração</h2>
       <Chart
         type="bar"
-        // chart.js supports mixing "line" datasets (controle + the $10
+        // chart.js supports mixing "line" datasets (controle + the $100
         // baseline) into an otherwise "bar" chart at runtime;
         // react-chartjs-2's types don't model that mix for a single
         // type="bar" chart, so this cast is a narrow, deliberate escape
@@ -117,7 +117,7 @@ export function GeracoesTab({ snapshot }: GeracoesTabProps) {
               },
               {
                 type: "line",
-                label: "$10 parado",
+                label: "$100 parado",
                 data: baselineData,
                 borderColor: BASELINE_HAIRLINE,
                 borderDash: [2, 3],

@@ -94,7 +94,7 @@ free to run.
 
 ### Motor: live paper-trading firm (continuous)
 
-`pnpm motor` runs the live firm: $10 generations of genome-driven traders on
+`pnpm motor` runs the live firm: $100 generations of genome-driven traders on
 Binance 5m bars (paper money, public data, no keys), an always-on random
 cohort as the control, evidence-based HR daily, and peak-equity records per
 generation. State and the append-only event log live in `~/.automaton/motor.db`.
