@@ -33,15 +33,26 @@ describe("App", () => {
     vi.unstubAllGlobals();
   });
 
-  it("renders the wordmark, kicker, and the new 4-link site nav", async () => {
+  it("renders the wordmark, kicker, and the 5-link site nav", async () => {
     render(<App />);
 
     expect(await screen.findByText("A Firma")).toBeInTheDocument();
     expect(screen.getByText(/Automaton · pesquisa de trading/i)).toBeInTheDocument();
 
-    for (const label of ["Pregão", "Empresa", "Gerações", "Mural"]) {
+    for (const label of ["Pregão", "Leaderboard", "Empresa", "Gerações", "Mural"]) {
       expect(screen.getByRole("button", { name: label })).toBeInTheDocument();
     }
+  });
+
+  it("switches to the LMArena-style Leaderboard route and renders traders from the snapshot", async () => {
+    render(<App />);
+
+    expect(await screen.findByTestId("line-chart-stub")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Leaderboard" }));
+
+    expect(screen.getByText("Ada Faria")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Leaderboard" })).toHaveAttribute("aria-current", "page");
   });
 
   it("defaults to the Pregão route and switches content when a nav link is clicked", async () => {

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useSnapshot } from "./useSnapshot";
 import { usd } from "./format";
 import { PregaoTab } from "./tabs/PregaoTab";
+import { LeaderboardTab } from "./tabs/LeaderboardTab";
 import { GeracoesTab } from "./tabs/GeracoesTab";
 import { EmpresaTab } from "./tabs/EmpresaTab";
 import { MuralTab } from "./tabs/MuralTab";
@@ -9,10 +10,14 @@ import { MuralTab } from "./tabs/MuralTab";
 const VIRGIN_DAYS_GATE = 90;
 const DEFAULT_EQUITY_MC = 1_000_000; // $10.00, matches the Motor's seed equity
 
-type Route = "pregao" | "empresa" | "geracoes" | "mural";
+type Route = "pregao" | "leaderboard" | "empresa" | "geracoes" | "mural";
 
+// LMArena-style ranked Leaderboard is a named product identity anchor —
+// it stays alongside Empresa's org chart (ranking vs. structure), not
+// replaced by it. Controller ruling, 2026-08-17.
 const NAV_ITEMS: Array<{ route: Route; label: string }> = [
   { route: "pregao", label: "Pregão" },
+  { route: "leaderboard", label: "Leaderboard" },
   { route: "empresa", label: "Empresa" },
   { route: "geracoes", label: "Gerações" },
   { route: "mural", label: "Mural" },
@@ -90,6 +95,7 @@ export default function App() {
 
       <main className="page-content">
         {route === "pregao" && <PregaoTab snapshot={snapshot} />}
+        {route === "leaderboard" && <LeaderboardTab snapshot={snapshot} />}
         {route === "empresa" && <EmpresaTab snapshot={snapshot} />}
         {route === "geracoes" && <GeracoesTab snapshot={snapshot} />}
         {route === "mural" && <MuralTab snapshot={snapshot} />}
