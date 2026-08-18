@@ -12,10 +12,14 @@ import { dateShort } from "../format";
 
 ChartJS.register(LinearScale, PointElement, LineElement, Tooltip, Legend);
 
-const DARK_GREEN = "#58a27a";
-const DARK_MUTED = "#8f8d82";
-const DARK_BASELINE = "#4a4943";
-const DARK_GRID = "#2c2b27";
+// pxpush identity chart palette — mirrors theme.css's --green/--lightgrey
+// tokens (chart.js reads plain CSS color strings, not custom properties,
+// so these are kept in sync by hand).
+const FIRM_GREEN = "#0f0";
+const MUTED_TEXT = "#71737d";
+const BASELINE_HAIRLINE = "hsla(0, 0%, 100%, 0.35)";
+const GRID_HAIRLINE = "hsla(0, 0%, 100%, 0.08)";
+const MONO_FONT = "'Geist Mono', Consolas, monospace";
 const BASELINE_USD = 10;
 const MAX_TRADE_ITEMS = 12;
 
@@ -50,8 +54,8 @@ export function PregaoTab({ snapshot }: PregaoTabProps) {
       {
         label: "firma",
         data: evolvedPoints,
-        borderColor: DARK_GREEN,
-        backgroundColor: DARK_GREEN,
+        borderColor: FIRM_GREEN,
+        backgroundColor: FIRM_GREEN,
         borderWidth: 2,
         pointRadius: 0,
         tension: 0.15,
@@ -59,8 +63,8 @@ export function PregaoTab({ snapshot }: PregaoTabProps) {
       {
         label: "controle aleatório",
         data: randomPoints,
-        borderColor: DARK_MUTED,
-        backgroundColor: DARK_MUTED,
+        borderColor: MUTED_TEXT,
+        backgroundColor: MUTED_TEXT,
         borderWidth: 1.5,
         borderDash: [4, 4],
         pointRadius: 0,
@@ -72,7 +76,7 @@ export function PregaoTab({ snapshot }: PregaoTabProps) {
           { x: minTs, y: BASELINE_USD },
           { x: maxTs, y: BASELINE_USD },
         ],
-        borderColor: DARK_BASELINE,
+        borderColor: BASELINE_HAIRLINE,
         borderDash: [2, 3],
         borderWidth: 1,
         pointRadius: 0,
@@ -85,16 +89,20 @@ export function PregaoTab({ snapshot }: PregaoTabProps) {
     scales: {
       x: {
         type: "linear" as const,
-        ticks: { callback: (value: number | string) => dateShort(Number(value)), color: DARK_MUTED },
-        grid: { color: DARK_GRID },
+        ticks: {
+          callback: (value: number | string) => dateShort(Number(value)),
+          color: MUTED_TEXT,
+          font: { family: MONO_FONT },
+        },
+        grid: { color: GRID_HAIRLINE },
       },
       y: {
-        ticks: { callback: (value: number | string) => `$${value}`, color: DARK_MUTED },
-        grid: { color: DARK_GRID },
+        ticks: { callback: (value: number | string) => `$${value}`, color: MUTED_TEXT, font: { family: MONO_FONT } },
+        grid: { color: GRID_HAIRLINE },
       },
     },
     plugins: {
-      legend: { labels: { color: DARK_MUTED, font: { family: "Verdana" } } },
+      legend: { labels: { color: MUTED_TEXT, font: { family: MONO_FONT } } },
     },
   };
 
@@ -104,12 +112,12 @@ export function PregaoTab({ snapshot }: PregaoTabProps) {
 
   return (
     <div>
-      <h2 className="label">Curva de equity</h2>
+      <h2 className="section-title">Curva de equity</h2>
       <Line data={data} options={options} />
 
       <hr />
 
-      <h2 className="label">Últimos trades</h2>
+      <h2 className="section-title">Últimos trades</h2>
       <ul className="trade-feed">
         {trades.length === 0 && <li>Sem trades ainda.</li>}
         {trades.slice(0, MAX_TRADE_ITEMS).map((item) => (

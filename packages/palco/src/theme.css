@@ -75,6 +75,20 @@ body {
   padding: 2px 0.6em;
 }
 
+/* Section title — the other half of signature pattern #5 ("A FIRMA" huge,
+ * tab titles same family smaller): Anton uppercase headline used for each
+ * tab's section headings, smaller than the nav wordmark. */
+.section-title {
+  display: block;
+  font-family: var(--font-display);
+  font-size: clamp(20px, 2.6vw, 30px);
+  line-height: 0.95;
+  text-transform: uppercase;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  margin: 0 0 14px;
+}
+
 hr,
 .rule {
   border: 0;
@@ -302,12 +316,14 @@ footer.honesty p {
   gap: 6px;
 }
 
+/* Outlined mono tags — transparent bg, hairline border, per the Leaderboard
+ * spec ("genome chips become mono outlined tags"). */
 .genome-chips .chip {
   font-family: var(--font-mono);
   font-size: 10.5px;
   letter-spacing: 0.02em;
-  color: var(--lightgrey);
-  background: var(--black);
+  color: var(--ink);
+  background: transparent;
   border: var(--border-fade);
   padding: 3px 9px;
   white-space: nowrap;
@@ -323,13 +339,12 @@ footer.honesty p {
   padding: 2px 7px;
 }
 
-/* ---------- Mural: social posts ---------- */
+/* ---------- Mural: old-social-network post boxes ---------- */
 
+/* The disclaimer doubles up as `.label` (see MuralTab.tsx) for the chip
+ * typography — this rule only carries its layout spacing. */
 .mural-disclaimer {
   margin: 0 0 14px;
-  font-size: 11px;
-  color: var(--lightgrey);
-  font-style: italic;
 }
 
 ul.mural-feed {
@@ -343,41 +358,59 @@ ul.mural-feed {
 
 li.mural-post {
   display: flex;
-  gap: 12px;
-  padding: 14px 16px;
+  flex-direction: column;
   background: var(--black);
   border: var(--border-fade);
+  border-radius: var(--radius);
+  overflow: hidden; /* clip the title bar's square corners to the card's tiny radius */
+}
+
+/* Big-pnl posts (ungrouped trade_closed) get a colored left accent —
+ * small/grouped trades never carry a pnlClass, so they stay neutral. */
+.mural-post.post-pnl-pos {
+  border-left: 3px solid var(--green);
+}
+
+.mural-post.post-pnl-neg {
+  border-left: 3px solid var(--red);
+}
+
+/* Title bar — the retro signature: full-width grey strip, blue text,
+ * square avatar, bold name + cargo, right-aligned "scrap #N" and mono
+ * timestamp. */
+.mural-post-titlebar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--ink);
+  color: var(--blue);
+  padding: 6px 10px;
 }
 
 .post-avatar {
   flex: 0 0 auto;
-  width: 38px;
-  height: 38px;
-  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  border-radius: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: bold;
   color: var(--ink);
 }
 
-.post-body {
-  flex: 1;
-  min-width: 0;
-}
-
-.post-author {
+.mural-post-who {
   display: flex;
-  align-items: baseline;
-  gap: 8px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  line-height: 1.25;
+  min-width: 0;
 }
 
 .author-name {
   font-weight: 500;
-  color: var(--ink);
+  color: var(--blue);
 }
 
 .author-cargo {
@@ -385,19 +418,31 @@ li.mural-post {
   font-size: 10px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--lightgrey);
+  color: var(--blue);
+  opacity: 0.75;
 }
 
-.post-ts {
+.mural-scrap {
   margin-left: auto;
   font-family: var(--font-mono);
   font-size: 10px;
-  color: var(--lightgrey);
+  color: var(--blue);
+  opacity: 0.7;
   white-space: nowrap;
 }
 
+.post-ts {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--blue);
+  white-space: nowrap;
+}
+
+.post-body {
+  padding: 12px 14px 4px;
+}
+
 .post-headline {
-  margin-top: 4px;
   font-size: 14px;
   color: var(--ink);
 }
@@ -418,9 +463,22 @@ li.mural-post {
   font-style: italic;
 }
 
-.post-reactions {
-  margin-top: 10px;
+/* Footer bar — old-style reaction counters plus decorative, non-interactive
+ * pseudo-links ("curtir · comentar" is set dressing, per the plan). */
+.mural-post-footer {
   display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 8px 14px 12px;
+  border-top: var(--border-fade);
+  margin-top: 6px;
+}
+
+.post-reactions {
+  display: flex;
+  align-items: center;
   gap: 14px;
 }
 
@@ -428,6 +486,15 @@ li.mural-post {
   font-size: 12px;
   color: var(--lightgrey);
   font-family: var(--font-mono);
+}
+
+.mural-pseudo-links {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--lightblue);
+  text-decoration: underline;
+  cursor: default;
+  white-space: nowrap;
 }
 
 .fade-highlight {
@@ -445,15 +512,23 @@ li.mural-post {
 
 /* ---------- Empresa ---------- */
 
+/* RH card — the one warm accent tint: --cream background, --black text,
+ * per the plan's "colored section tints... use sparingly" pattern. */
 .rh-card {
-  background: var(--black);
+  background: var(--cream);
   border: var(--border-fade);
   padding: 18px 20px;
   margin-bottom: 28px;
+  color: var(--black);
+}
+
+.rh-card .section-title {
+  color: var(--black);
 }
 
 .rh-policy {
-  color: var(--lightgrey);
+  color: var(--black);
+  opacity: 0.7;
   font-style: italic;
   max-width: 72ch;
   margin: 8px 0 14px;
@@ -468,7 +543,7 @@ li.mural-post {
 .rh-counters .v {
   font-family: var(--font-mono);
   font-size: 22px;
-  color: var(--green);
+  color: var(--black);
   font-variant-numeric: tabular-nums;
 }
 
@@ -490,48 +565,52 @@ li.mural-post {
   }
 }
 
-.org-column h3.label {
+.org-column h3.section-title {
   margin: 0 0 10px;
 }
 
+/* Employee cards — same retro panel + title-bar treatment as the Mural's
+ * post boxes (square avatar in the strip). */
 .employee-card {
   display: flex;
-  gap: 12px;
+  flex-direction: column;
   background: var(--black);
   border: var(--border-fade);
-  padding: 12px 14px;
+  border-radius: var(--radius);
+  overflow: hidden;
   margin-bottom: 10px;
+}
+
+.employee-titlebar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--ink);
+  color: var(--blue);
+  padding: 6px 10px;
 }
 
 .employee-avatar {
   flex: 0 0 auto;
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  border-radius: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: bold;
   color: var(--ink);
 }
 
-.employee-info {
-  flex: 1;
-  min-width: 0;
-}
-
-.employee-name-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
 .employee-name {
   font-weight: 500;
-  color: var(--ink);
+  color: var(--blue);
+}
+
+.employee-info {
+  padding: 10px 14px 12px;
 }
 
 .employee-cargo {
@@ -564,20 +643,29 @@ li.mural-post {
   border-color: var(--green);
 }
 
+/* vivo = green, morto = red, demitido = lightgrey — per the Leaderboard
+ * spec's chip-color mapping (shared with Empresa's status-chip). */
 .status-dead {
-  color: var(--lightgrey);
-}
-
-.status-fired {
   color: var(--red);
   border-color: var(--red);
 }
 
+.status-fired {
+  color: var(--lightgrey);
+}
+
+/* Neutral grey chip — used where a status-like chip needs no live/dead/
+ * fired semantics (e.g. Gerações' "encerrada"). */
+.status-neutral {
+  color: var(--lightgrey);
+}
+
 .lineage-line {
   margin-top: 6px;
+  font-family: var(--font-mono);
   font-size: 11.5px;
   color: var(--lightgrey);
-  font-style: italic;
+  font-style: normal;
 }
 
 .employee-genome {
@@ -614,11 +702,11 @@ ul.history-timeline li {
 /* ---------- Gerações ---------- */
 
 .gen-explainer {
+  font-family: var(--font-mono);
   color: var(--lightgrey);
-  font-style: italic;
   max-width: 76ch;
   margin: 12px 0 22px;
-  font-size: 13px;
+  font-size: 12.5px;
 }
 
 .gen-timeline {
@@ -648,10 +736,12 @@ ul.history-timeline li {
 }
 
 .gen-card .peak {
-  font-family: var(--font-body);
-  font-size: 30px;
+  font-family: var(--font-display);
+  font-size: clamp(32px, 5vw, 56px);
+  line-height: 0.9;
+  text-transform: uppercase;
   color: var(--green);
-  margin: 4px 0;
+  margin: 6px 0;
   font-variant-numeric: tabular-nums;
 }
 
@@ -686,7 +776,8 @@ ul.trade-feed li {
   padding: 9px 0 9px 10px;
   border-bottom: var(--border-fade);
   border-left: 3px solid transparent;
-  font-size: 13.5px;
+  font-family: var(--font-mono);
+  font-size: 13px;
 }
 
 ul.trade-feed li.pnl-pos {
@@ -737,6 +828,7 @@ ul.trade-feed .ts {
 
 .p-datatable .p-datatable-tbody > tr > td {
   border-color: var(--border-color-fade);
+  font-family: var(--font-mono);
   font-size: 13.5px;
 }
 

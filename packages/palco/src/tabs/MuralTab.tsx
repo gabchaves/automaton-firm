@@ -42,23 +42,34 @@ export function MuralTab({ snapshot }: MuralTabProps) {
 
   return (
     <div>
-      <p className="mural-disclaimer">{REACTIONS_DISCLAIMER}</p>
+      <p className="mural-disclaimer label">{REACTIONS_DISCLAIMER}</p>
       <ul className="mural-feed">
         {posts.map((post) => {
           const highlighted = post.memberIds.some((id) => newIds.has(id));
           const reactions = seededReactions(post.reactionSeed, post.includeSad);
+          const pnlBorderClass = post.pnlClass ? ` post-pnl-${post.pnlClass}` : "";
+          const postClassName = `mural-post${pnlBorderClass}${highlighted ? " fade-highlight" : ""}`;
+          // "scrap #N" — a cheap, tasteful old-social-network garnish using
+          // the newest underlying feed event id this post represents.
+          const scrapId = post.memberIds[0];
 
           return (
-            <li key={post.key} className={highlighted ? "mural-post fade-highlight" : "mural-post"}>
-              <div className="post-avatar" style={{ background: avatarBackground(post.author.name) }}>
-                {initials(post.author.name)}
-              </div>
-              <div className="post-body">
-                <div className="post-author">
+            <li key={post.key} className={postClassName}>
+              {/* Title bar — the retro old-social-network signature: grey
+                  strip, square avatar, name/cargo, mono timestamp. */}
+              <div className="mural-post-titlebar">
+                <div className="post-avatar" style={{ background: avatarBackground(post.author.name) }}>
+                  {initials(post.author.name)}
+                </div>
+                <div className="mural-post-who">
                   <span className="author-name">{post.author.name}</span>
                   <span className="author-cargo">{post.author.cargo}</span>
-                  <span className="post-ts">{relativeTime(post.ts, nowMs)}</span>
                 </div>
+                <span className="mural-scrap">scrap #{scrapId}</span>
+                <span className="post-ts">{relativeTime(post.ts, nowMs)}</span>
+              </div>
+
+              <div className="post-body">
                 <div className="post-headline">{post.headline}</div>
                 {post.fallbackHtml !== undefined ? (
                   /*
@@ -74,11 +85,17 @@ export function MuralTab({ snapshot }: MuralTabProps) {
                   <p className="post-text">{post.body}</p>
                 )}
                 {post.quoted && <blockquote className="post-reason">{post.quoted}</blockquote>}
-                <div className="post-reactions">
+              </div>
+
+              {/* Footer bar — old-style reaction counters plus decorative,
+                  non-interactive pseudo-links (set dressing, per the plan). */}
+              <div className="mural-post-footer">
+                <span className="post-reactions">
                   <span className="reaction">👏 {reactions.clap}</span>
                   <span className="reaction">🔥 {reactions.fire}</span>
                   {reactions.sad !== null && <span className="reaction">😢 {reactions.sad}</span>}
-                </div>
+                </span>
+                <span className="mural-pseudo-links">curtir · comentar</span>
               </div>
             </li>
           );

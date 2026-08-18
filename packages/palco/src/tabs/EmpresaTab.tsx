@@ -48,16 +48,18 @@ function EmployeeCard({ employee, genome }: { employee: Employee; genome: PalcoG
 
   return (
     <div className="employee-card">
-      <div className="employee-avatar" style={{ background: avatarBackground(employee.name) }}>
-        {initials(employee.name)}
+      {/* Title-bar treatment, same retro pattern as the Mural's post boxes:
+          grey strip, square avatar, name, status chip. */}
+      <div className="employee-titlebar">
+        <div className="employee-avatar" style={{ background: avatarBackground(employee.name) }}>
+          {initials(employee.name)}
+        </div>
+        <span className="employee-name">{employee.name}</span>
+        <span className={`status-chip ${STATUS_CLASS[employee.status] ?? ""}`}>
+          {STATUS_PT[employee.status] ?? employee.status}
+        </span>
       </div>
       <div className="employee-info">
-        <div className="employee-name-row">
-          <span className="employee-name">{employee.name}</span>
-          <span className={`status-chip ${STATUS_CLASS[employee.status] ?? ""}`}>
-            {STATUS_PT[employee.status] ?? employee.status}
-          </span>
-        </div>
         <div className="employee-cargo">
           Mesa {employee.symbol} · {employee.leverage}x
         </div>
@@ -118,7 +120,7 @@ export function EmpresaTab({ snapshot }: EmpresaTabProps) {
   return (
     <div>
       <section className="rh-card">
-        <h2 className="label">Recursos Humanos</h2>
+        <h2 className="section-title">Recursos Humanos</h2>
         <p className="rh-policy">{org?.hrPolicy ?? ""}</p>
         <div className="rh-counters">
           <div>
@@ -134,14 +136,14 @@ export function EmpresaTab({ snapshot }: EmpresaTabProps) {
 
       <div className="org-columns">
         <div className="org-column">
-          <h3 className="label">A Firma</h3>
+          <h3 className="section-title">A Firma</h3>
           {firmEmployees.length === 0 && <p>Sem funcionários ainda.</p>}
           {firmEmployees.map((employee) => (
             <EmployeeCard key={employee.traderId} employee={employee} genome={genomeById.get(employee.traderId)} />
           ))}
         </div>
         <div className="org-column">
-          <h3 className="label">Controle</h3>
+          <h3 className="section-title">Controle</h3>
           {controlEmployees.length === 0 && <p>Sem funcionários ainda.</p>}
           {controlEmployees.map((employee) => (
             <EmployeeCard key={employee.traderId} employee={employee} genome={genomeById.get(employee.traderId)} />
@@ -150,7 +152,7 @@ export function EmpresaTab({ snapshot }: EmpresaTabProps) {
       </div>
 
       <section className="org-history">
-        <h2 className="label">Histórico</h2>
+        <h2 className="section-title">Histórico</h2>
         <ul className="history-timeline">
           {history.length === 0 && <li>Sem histórico ainda.</li>}
           {history.map((item) => (

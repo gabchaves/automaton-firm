@@ -30,6 +30,10 @@ export interface MuralPost {
   reactionSeed: number;
   includeSad: boolean;
   fallbackHtml?: string;
+  // Set only for an ungrouped (i.e. "big") trade_closed post — small trades
+  // never reach buildEventPost, they're folded into buildGroupedTradePost
+  // instead. Drives the retro post box's green/red left-border accent.
+  pnlClass?: "pos" | "neg";
 }
 
 // Trades grouped into one "Resumo da mesa" post when |pnl| is below this —
@@ -103,6 +107,7 @@ function buildEventPost(item: FeedItem): MuralPost {
           ? `Fechamos ${symbol} com lucro de ${usd(pnl)}. 🎉`
           : `Fechamos ${symbol} com perda de ${usd(Math.abs(pnl))}.${liquidatedNote}`,
         includeSad: false,
+        pnlClass: win ? "pos" : "neg",
       };
     }
     case "trader_hired": {

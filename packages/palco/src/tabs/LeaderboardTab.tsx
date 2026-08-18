@@ -20,10 +20,15 @@ const STATUS_ICON: Record<string, string> = {
   fired: "📦",
 };
 
+// Same status -> chip-color mapping as EmpresaTab's STATUS_CLASS (kept as a
+// local constant per this codebase's existing per-tab convention rather
+// than a shared module).
+const STATUS_CLASS: Record<string, string> = { live: "status-live", dead: "status-dead", fired: "status-fired" };
+
 /** LMArena-style ranked leaderboard — one of the product's named identity
  * anchors, kept alongside (not replaced by) the Empresa org chart: this
  * view ranks current traders by book size; Empresa shows org structure
- * and lineage. Restyled for the v1.1 dark palette via theme.css's
+ * and lineage. Restyled for the v2 pxpush palette via theme.css's
  * `.p-datatable`/`.p-tag` overrides; the genome column now uses the
  * shared GenomeChips component instead of the old raw "family + family"
  * string. */
@@ -51,7 +56,7 @@ export function LeaderboardTab({ snapshot }: LeaderboardTabProps) {
       <Column
         header="Status"
         body={(row) => (
-          <span>
+          <span className={`status-chip ${STATUS_CLASS[row.status] ?? ""}`}>
             {STATUS_ICON[row.status] ?? ""} {STATUS_PT[row.status] ?? row.status}
           </span>
         )}
