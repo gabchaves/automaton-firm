@@ -42,6 +42,10 @@ export const EVENT_PAYLOAD_SCHEMAS = {
     barsLived: z.number().int(),
     daysLived: z.number(),
     isNewRecord: z.boolean(),
+    // Residual firm equity at death (books are 0, so this is the leftover
+    // reserve). Recorded so no paper money ever vanishes silently — it does
+    // not carry into the next generation's fresh $10.
+    finalEquityMc: z.number().int(),
   }),
 
   record_broken: z.strictObject({

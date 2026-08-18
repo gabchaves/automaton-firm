@@ -104,7 +104,11 @@ function fireTrader(
 
   const trader: TraderRuntime = {
     ...t,
-    step: outcome.state,
+    // The book moves to the firm reserve. Zeroing it here keeps that money in
+    // exactly one place — firmEquityMc sums every trader plus the reserve, so
+    // a fired trader keeping its cash would be counted twice and inflate the
+    // evolved cohort's record against the (never-fired) random control.
+    step: { ...outcome.state, cashMc: 0 },
     status: "fired",
     realizedPnlMc: outcome.closed ? t.realizedPnlMc + outcome.realizedPnlMc : t.realizedPnlMc,
     tradesCount: outcome.closed ? t.tradesCount + 1 : t.tradesCount,

@@ -56,11 +56,16 @@ function errMessage(err: unknown): string {
  * byte-identical generation/trader ids whether they arrive one tick at a
  * time or as one big catch-up batch.
  */
-function createMkId(seedTime: number): () => string {
+/**
+ * `scope` salts the id stream per call site (0 = init, 1 = bar processing) so
+ * two closures created with the same seedTime — boot seeding at firstBarTs and
+ * processing that very bar — can never produce colliding ids.
+ */
+function createMkId(seedTime: number, scope: number): () => string {
   let counter = 0;
   return (): string => {
     counter += 1;
-    const prng = mulberry32(hashSeed(seedTime, counter));
+    const prng = mulberry32(hashSeed(seedTime, scope, counter));
     return ulidFactory(prng)(seedTime);
   };
 }
@@ -195,7 +200,7 @@ function ensureInitialized(db: MotorDb, firstBarTs: number | null): void {
   if (db.getMeta("initialized") !== null) return;
 
   db.tx(() => {
-    const mkId = createMkId(firstBarTs);
+    const mkId = createMkId(firstBarTs, 0);
     const events: MotorEventDraft[] = [];
     for (const cohort of COHORTS) {
       const generationId = mkId();
@@ -214,12 +219,18 @@ function handleGenerationEnd(
   db: MotorDb,
   deadRuntime: CohortRuntime,
   ts: number,
+  closeBySymbol: Map<string, number>,
   mkId: () => string,
 ): { runtime: CohortRuntime; events: MotorEventDraft[] } {
   const events: MotorEventDraft[] = [];
   const previousRecordMc = db.getBestEndedRecordMc(deadRuntime.cohort);
   const isNewRecord = deadRuntime.peakEquityMc > previousRecordMc;
   const daysLived = Math.round(((ts - deadRuntime.startedAt) / HR_DAY_MS) * 10) / 10;
+  // With every trader dead this is the residual reserve (< the hire stake, or
+  // fire-returns HR could not re-stake). It does NOT carry into the next
+  // generation — each life starts with exactly $10 — so it is recorded here
+  // instead of vanishing silently.
+  const finalEquityMc = firmEquityMc(deadRuntime, closeBySymbol);
 
   events.push({
     ts, type: "gen_ended", traderId: null, generationId: deadRuntime.generationId,
@@ -231,6 +242,7 @@ function handleGenerationEnd(
       barsLived: deadRuntime.barsLived,
       daysLived,
       isNewRecord,
+      finalEquityMc,
     },
   });
 
@@ -303,7 +315,7 @@ function processBar(
   closeBySymbol: Map<string, number>,
   historyBySymbol: Map<string, number[]>,
 ): CohortPair {
-  const mkId = createMkId(ts);
+  const mkId = createMkId(ts, 1);
   const drafts: MotorEventDraft[] = [];
 
   // a. step both cohorts one bar.
@@ -324,21 +336,8 @@ function processBar(
     drafts.push(...hrResult.events);
   }
 
-  // d. generation-end handling + respawn.
-  if (evolvedStep.generationEnded) {
-    const ended = handleGenerationEnd(db, evolved, ts, mkId);
-    evolved = ended.runtime;
-    drafts.push(...ended.events);
-  }
-  if (randomStep.generationEnded) {
-    const ended = handleGenerationEnd(db, random, ts, mkId);
-    random = ended.runtime;
-    drafts.push(...ended.events);
-  }
-
-  // e. persist everything this bar produced, atomically.
-  emitEvents(db, drafts);
-
+  // d. snapshot BEFORE any respawn: the death bar must record the dying
+  // generation's final equity, not the fresh $10 of its successor.
   db.insertEquitySnapshot(ts, "evolved", firmEquityMc(evolved, closeBySymbol));
   db.insertEquitySnapshot(ts, "random", firmEquityMc(random, closeBySymbol));
   for (const t of evolved.traders) {
@@ -347,6 +346,21 @@ function processBar(
   for (const t of random.traders) {
     if (t.status === "live") db.insertTraderSnapshot(ts, t.id, traderEquityMc(t, closeBySymbol));
   }
+
+  // e. generation-end handling + respawn.
+  if (evolvedStep.generationEnded) {
+    const ended = handleGenerationEnd(db, evolved, ts, closeBySymbol, mkId);
+    evolved = ended.runtime;
+    drafts.push(...ended.events);
+  }
+  if (randomStep.generationEnded) {
+    const ended = handleGenerationEnd(db, random, ts, closeBySymbol, mkId);
+    random = ended.runtime;
+    drafts.push(...ended.events);
+  }
+
+  // f. persist everything this bar produced, atomically.
+  emitEvents(db, drafts);
 
   persistCohort(db, evolved);
   persistCohort(db, random);
@@ -370,13 +384,28 @@ export async function tick(deps: {
   const firstBarTs = db.listBarTimestamps(-1)[0] ?? null;
   ensureInitialized(db, firstBarTs);
 
-  // 3. Process every new bar timestamp, ascending, each in its own tx.
+  // 3. Process every new bar timestamp, ascending, each in its own tx —
+  // but only up to the SLOWEST symbol's fetch cursor. Advancing past a
+  // symbol whose fetch failed would let its bars arrive later, behind the
+  // watermark, silently skipping that symbol's trading on those bars. Bars
+  // at or below every cursor are final: each symbol's next fetch starts
+  // strictly after its own cursor.
   const lastProcessedRaw = db.getMeta("lastProcessedTs");
   const processedFrom = lastProcessedRaw !== null
     ? Number(lastProcessedRaw)
     : firstBarTs !== null ? firstBarTs - 1 : -1;
 
-  const timestamps = db.listBarTimestamps(processedFrom);
+  let minCursor: number | null = null;
+  for (const symbol of SYMBOLS) {
+    const cursor = db.getCursor(symbol);
+    if (cursor === null) { minCursor = null; break; }
+    minCursor = minCursor === null ? cursor : Math.min(minCursor, cursor);
+  }
+
+  const processLimit = minCursor;
+  const timestamps = processLimit === null
+    ? []
+    : db.listBarTimestamps(processedFrom).filter((ts) => ts <= processLimit);
   const fromTs = timestamps.length > 0 ? timestamps[0] : null;
   let toTs: number | null = null;
 

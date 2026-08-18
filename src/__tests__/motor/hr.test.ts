@@ -5,7 +5,7 @@ import { join } from "path";
 import { openMotorDb } from "../../motor/db.js";
 import type { MotorDb } from "../../motor/db.js";
 import { HR_WINDOW_MS, MOTOR_HR_CONFIG, runHrReview } from "../../motor/hr.js";
-import { seedGeneration, TRADER_START_MC } from "../../motor/cohort.js";
+import { firmEquityMc, seedGeneration, TRADER_START_MC } from "../../motor/cohort.js";
 
 let db: MotorDb;
 let dir: string;
@@ -66,6 +66,10 @@ describe("runHrReview", () => {
     expect(result.evolved.traders.some((t) => t.id === parentTraderId && t.status === "live")).toBe(true);
     expect(result.evolved.traders.filter((t) => t.status === "live").length).toBe(5);
     expect(result.events.some((e) => e.type === "hr_review")).toBe(true);
+    // Money conservation: firing + hiring moves capital, never duplicates it.
+    // 4 untouched books + the fired trader's $1.00 (now staked in the hire),
+    // fired trader zeroed, reserve emptied — exactly what existed before.
+    expect(firmEquityMc(result.evolved, new Map())).toBe(4 * TRADER_START_MC + 100_000);
   });
 
   test("insufficient evidence is NEVER fired: zero trades and a quiet benchmark hold", () => {

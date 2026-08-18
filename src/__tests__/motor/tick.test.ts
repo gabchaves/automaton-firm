@@ -91,16 +91,27 @@ describe("tick", () => {
     expect(catchUps.length).toBe(1);
   });
 
-  test("one symbol's feed failure does not block the others", async () => {
+  test("a failed symbol is never silently skipped: processing waits at its cursor", async () => {
     const db = fresh();
     const market = buildMarket(200);
     const flaky = (async (url: RequestInfo | URL) => {
       if (String(url).includes("SOLUSDT")) return new Response("boom", { status: 500 });
       return syntheticFetch(market)(url as never);
     }) as typeof fetch;
-    const report = await tick({ db, nowMs: 200 * BAR_MS, fetchImpl: flaky });
-    expect(report.barsProcessed).toBeGreaterThan(0);
+
+    // Tick 1: SOL's feed fails. The other cursors advance, but NO bars are
+    // processed — advancing the watermark would let SOL's bars arrive behind
+    // it later and lose that symbol's trading on those bars forever.
+    const report1 = await tick({ db, nowMs: 200 * BAR_MS, fetchImpl: flaky });
+    expect(report1.barsProcessed).toBe(0);
     expect(db.getCursor("SOLUSDT")).toBeNull(); // untouched, will retry
     expect(db.getCursor("BTCUSDT")).not.toBeNull();
+
+    // Tick 2: SOL recovers. Everything is processed from the start, with all
+    // three symbols' bars present — identical to a never-failed run.
+    const report2 = await tick({ db, nowMs: 200 * BAR_MS, fetchImpl: syntheticFetch(market) });
+    expect(report2.barsProcessed).toBe(200);
+    const solBars = db.raw.prepare("SELECT COUNT(*) AS n FROM bars WHERE symbol = 'SOLUSDT'").get() as { n: number };
+    expect(solBars.n).toBe(200);
   });
 });

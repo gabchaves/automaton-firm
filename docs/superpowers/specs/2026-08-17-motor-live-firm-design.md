@@ -81,6 +81,11 @@ Binance public REST (spot klines, 5m)          no API key, Zod at the boundary
 - **Cursor:** `cursor(symbol, lastClosedBarTs)` in the DB. `tick()` fetches
   `(lastClosedBarTs, now]`, processes bars in timestamp order across symbols, and
   advances the cursor **in the same transaction** as the state changes.
+- **Slowest-symbol gate:** bars are processed only up to the minimum fetch
+  cursor across all symbols. If one symbol's fetch fails, processing waits at
+  its cursor rather than advancing past it — otherwise that symbol's bars
+  would arrive later behind the watermark and its trading on those bars would
+  be silently lost, violating the catch-up guarantee.
 
 ## 6. Catch-up: PC-off periods are not evidence holes
 
@@ -114,10 +119,16 @@ simply finds a larger backlog.
 - **Fired ≠ died:** HR-fired traders return their remaining book to a firm
   reserve; a replacement is hired from the reserve with `min(reserve, $2)`.
   Reserve starts at 0 (the $10 is fully allocated at gen start).
-- **Generation death:** total firm equity (live books + reserve) ≤ 0. On death:
+- **Generation death:** no live traders remain (a reserve with no one left to
+  trade it cannot act, so waiting for literal equity ≤ 0 would zombie). Any
+  residual reserve at death — bounded small, since HR re-stakes fire-returns —
+  is recorded in `gen_ended.finalEquityMc` rather than vanishing silently, and
+  does **not** carry into the next generation's fresh $10. On death:
   `gen_ended` event with the record (peak equity, peak timestamp, bars lived,
-  days lived), `record_broken` if applicable, then **respawn** Gen N+1 with a
-  fresh $10.
+  days lived, final equity), `record_broken` if applicable, then **respawn**
+  Gen N+1 with a fresh $10. A fired trader's book moves to the reserve and its
+  own book is zeroed — capital lives in exactly one place, so `firmEquityMc`
+  can never double-count it (money-conservation is pinned by test).
 - **Respawn seeding (5 slots):** 1 elite clone (best genome of the dead gen by
   peak book equity, unmutated) + 2 elite mutants (mutations of the top-2 genomes)
   + 2 fresh random genomes (immigration — prevents inbreeding collapse and keeps
@@ -220,7 +231,7 @@ Every event has `ts` (bar close or wall time for lifecycle events), `type`, and 
 Zod-validated payload:
 
 `motor_started`, `motor_stopped`, `catch_up`, `gap` (reserved),
-`gen_started`, `gen_ended` (record + isNewRecord), `record_broken`,
+`gen_started`, `gen_ended` (record + isNewRecord + finalEquityMc), `record_broken`,
 `trade_opened`, `trade_closed` (PnL), `trader_died`, `trader_fired` (HR reason),
 `trader_hired`, `trader_promoted`, `hr_review` (summary), `achievement`.
 
