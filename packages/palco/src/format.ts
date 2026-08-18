@@ -46,6 +46,15 @@ export function absoluteTimestamp(ts: number): string {
   return `em ${ORKUT_DATE_FORMAT.format(ts)} ${ORKUT_TIME_FORMAT.format(ts)}`;
 }
 
+/** Bare "DD/MM/AAAA" (Brasília time), no "em " prefix — for the Empresa
+ * profile drawer's "na firma desde {absolute date}" line (v3.1 plan),
+ * which already supplies its own leading words. Reuses `ORKUT_DATE_FORMAT`
+ * so both absolute-date renderings across the app stay pinned to the same
+ * timezone/locale. */
+export function absoluteDate(ts: number): string {
+  return ORKUT_DATE_FORMAT.format(ts);
+}
+
 const MINUTE_MS = 60_000;
 const HOUR_MS = 3_600_000;
 const DAY_MS = 86_400_000;
@@ -62,4 +71,16 @@ export function relativeTime(ts: number, nowMs: number): string {
   const days = Math.floor(diffMs / DAY_MS);
   if (days === 1) return "ontem";
   return `há ${days} d`;
+}
+
+/** Hours + minutes remaining until the next UTC midnight, from `nowMs`.
+ * Plain Date math, no interval/timer — the Empresa org graph's RH node
+ * (v3.1 plan) calls this fresh on every render, which is "live enough" for
+ * a once-a-day review cadence and avoids adding a re-render loop just to
+ * tick a countdown. */
+export function hoursUntilNextUtcMidnight(nowMs: number): { hours: number; minutes: number } {
+  const now = new Date(nowMs);
+  const nextMidnightMs = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 0, 0, 0, 0);
+  const totalMinutes = Math.max(0, Math.round((nextMidnightMs - nowMs) / MINUTE_MS));
+  return { hours: Math.floor(totalMinutes / 60), minutes: totalMinutes % 60 };
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { EmpresaTab } from "../tabs/EmpresaTab";
 import { fixtureSnapshot } from "./fixtures";
 
@@ -34,10 +34,14 @@ describe("EmpresaTab", () => {
   it("renders every current-generation employee as a graph node with book/status", () => {
     render(<EmpresaTab snapshot={fixtureSnapshot} />);
 
+    // v3.1 restructured the graph into rows (live firm, live control, then
+    // a "galeria dos caídos" fallen row) instead of two cohort columns —
+    // Caue Reis (fired) now lands in the fallen row, after the two live
+    // rows, rather than staying grouped with the rest of the firm cohort.
     const employeeNames = Array.from(document.querySelectorAll(".org-node-name")).map(
       (el) => el.childNodes[0]?.textContent,
     );
-    expect(employeeNames).toEqual(["Ada Faria", "Beto Nunes", "Caue Reis", "Rand-7"]);
+    expect(employeeNames).toEqual(["Ada Faria", "Beto Nunes", "Rand-7", "Caue Reis"]);
 
     // Mesa/cargo text is intentionally NOT on the compact node (v3 Task 3
     // spec: avatar, name + mood, book mono, status chip only) — Leaderboard
@@ -82,5 +86,36 @@ describe("EmpresaTab", () => {
     render(<EmpresaTab snapshot={null} />);
     expect(screen.getByText("Sem funcionários ainda.")).toBeInTheDocument();
     expect(screen.getByText("Sem histórico ainda.")).toBeInTheDocument();
+  });
+
+  describe("profile drawer (v3.1)", () => {
+    it("opens Ada Faria's profile on node click, showing her name, a readable genome chip, and her achievements — then closes on Esc", async () => {
+      render(<EmpresaTab snapshot={fixtureSnapshot} />);
+
+      fireEvent.click(orgNodeByEmployeeName("Ada Faria"));
+
+      expect(screen.getByText("Ada Faria", { selector: ".empresa-drawer-name" })).toBeInTheDocument();
+      // Ada's genome (fixture): momentum fastBars=8/slowBars=34 + breakout channelBars=20.
+      expect(screen.getByText("⚡ Momentum 8/34 barras")).toBeInTheDocument();
+      expect(screen.getByText("✨ Primeira semana viva")).toBeInTheDocument();
+      expect(screen.queryByText("nenhuma conquista ainda")).not.toBeInTheDocument();
+
+      fireEvent.keyDown(document, { key: "Escape" });
+
+      await waitFor(() =>
+        expect(screen.queryByText("Ada Faria", { selector: ".empresa-drawer-name" })).not.toBeInTheDocument(),
+      );
+    });
+
+    it("falls back to a 'sem dados de mesa' note when the clicked employee has no matching leaderboard row", () => {
+      render(<EmpresaTab snapshot={fixtureSnapshot} />);
+
+      // Beto Nunes is in org.employees but not in the fixture's (2-entry)
+      // leaderboard — the drawer must degrade gracefully, not crash/blank.
+      fireEvent.click(orgNodeByEmployeeName("Beto Nunes"));
+
+      expect(screen.getByText("Beto Nunes", { selector: ".empresa-drawer-name" })).toBeInTheDocument();
+      expect(screen.getByText("sem dados de mesa desta geração")).toBeInTheDocument();
+    });
   });
 });

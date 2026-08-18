@@ -61,7 +61,13 @@ export function EmpresaTab({ snapshot }: EmpresaTabProps) {
       {employees.length === 0 ? (
         <p className="empty-state">Sem funcionários ainda.</p>
       ) : (
-        <OrgGraph employees={employees} hrPolicy={org?.hrPolicy ?? ""} />
+        <OrgGraph
+          employees={employees}
+          hrPolicy={org?.hrPolicy ?? ""}
+          leaderboard={snapshot?.leaderboard ?? []}
+          demissoes={demissoes}
+          promocoes={promocoes}
+        />
       )}
 
       <section className="org-history">
