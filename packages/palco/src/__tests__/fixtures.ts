@@ -78,6 +78,8 @@ export const fixtureSnapshot: PalcoSnapshot = {
         ],
       },
       achievements: ["Primeira semana viva", "Dobrou o book"],
+      inPosition: true,
+      entryPriceCents: 6_000_000,
     },
     {
       traderId: "t-rand7",
@@ -100,6 +102,8 @@ export const fixtureSnapshot: PalcoSnapshot = {
         genes: [{ family: "meanReversion", params: { lookbackBars: 40, entryZ: 1.5 } }],
       },
       achievements: [],
+      inPosition: false,
+      entryPriceCents: null,
     },
   ],
   feed: [

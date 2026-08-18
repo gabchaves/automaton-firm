@@ -58,6 +58,8 @@ export interface PalcoSnapshot {
     combinator: string;
     genome: PalcoGenome; // structured genome, parsed params per gene
     achievements: string[];
+    inPosition: boolean;
+    entryPriceCents: number | null;
   }>; // labels, from achievement events
   feed: Array<{ id: number; ts: number; type: string; html: string; payload: Record<string, unknown> }>; // 40 newest, html pre-formatted+escaped
   org: {

@@ -83,12 +83,12 @@ describe("buildSnapshot: cards", () => {
     expect(snap.cards.virginDays).toBe(10.3);
   });
 
-  test("defaults: no equity snapshots -> 1_000_000; no bars -> lastBarTs null, virginDays 0", () => {
+  test("defaults: no equity snapshots -> 10_000_000; no bars -> lastBarTs null, virginDays 0", () => {
     const d = fresh();
     d.insertGeneration(generationRow({ id: "g1" }));
     const snap = buildSnapshot(d.raw, 1234);
-    expect(snap.cards.evolvedEquityMc).toBe(1_000_000);
-    expect(snap.cards.randomEquityMc).toBe(1_000_000);
+    expect(snap.cards.evolvedEquityMc).toBe(10_000_000);
+    expect(snap.cards.randomEquityMc).toBe(10_000_000);
     expect(snap.cards.lastBarTs).toBeNull();
     expect(snap.cards.virginDays).toBe(0);
     expect(snap.cards.barsProcessed).toBe(0);
@@ -336,5 +336,26 @@ describe("buildSnapshot: org.history", () => {
     expect(
       snap.org.history.some((h) => h.type === "trader_hired" && (h.payload as { name: string }).name === "Antigo"),
     ).toBe(false);
+  });
+});
+
+describe("buildSnapshot: leaderboard open positions", () => {
+  test("inPosition/entryPriceCents come from state_json; flat and empty states are null", () => {
+    const d = fresh();
+    d.insertGeneration(generationRow({ id: "g1" }));
+    d.insertTrader(traderRow({
+      id: "t-open", stateJson: JSON.stringify({ inPosition: true, entryPriceCents: 10_000, cashMc: 1_900_000 }),
+    }));
+    d.insertTrader(traderRow({
+      id: "t-flat", slot: 1, stateJson: JSON.stringify({ inPosition: false, entryPriceCents: 0, cashMc: 2_000_000 }),
+    }));
+
+    const snapshot = buildSnapshot(d.raw, 1000);
+    const open = snapshot.leaderboard.find((t) => t.traderId === "t-open");
+    const flat = snapshot.leaderboard.find((t) => t.traderId === "t-flat");
+    expect(open?.inPosition).toBe(true);
+    expect(open?.entryPriceCents).toBe(10_000);
+    expect(flat?.inPosition).toBe(false);
+    expect(flat?.entryPriceCents).toBeNull();
   });
 });

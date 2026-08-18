@@ -52,7 +52,7 @@ export interface PalcoSnapshot {
 }
 
 const MS_PER_DAY = 86_400_000;
-const DEFAULT_EQUITY_MC = 1_000_000;
+const DEFAULT_EQUITY_MC = 10_000_000; // $100.00 seed
 const MAX_EQUITY_SERIES_POINTS = 400;
 const FEED_LIMIT = 40;
 
@@ -209,7 +209,7 @@ function computeLeaderboard(raw: BetterSqlite3.Database): PalcoSnapshot["leaderb
     .prepare(
       `SELECT t.id AS id, t.name AS name, t.cohort AS cohort, g.gen_number AS gen_number, t.status AS status,
               t.book_mc AS book_mc, t.realized_pnl_mc AS realized_pnl_mc, t.trades_count AS trades_count,
-              t.genome_json AS genome_json
+              t.genome_json AS genome_json, t.state_json AS state_json
        FROM traders t
        JOIN generations g ON g.id = t.generation_id
        WHERE g.ended_at IS NULL
@@ -218,12 +218,14 @@ function computeLeaderboard(raw: BetterSqlite3.Database): PalcoSnapshot["leaderb
     .all() as {
       id: string; name: string; cohort: string; gen_number: number; status: string;
       book_mc: number; realized_pnl_mc: number; trades_count: number; genome_json: string;
+      state_json: string;
     }[];
 
   const achievements = achievementsByTrader(raw);
 
   return rows.map((row) => {
     const genome = JSON.parse(row.genome_json) as GenomeShape;
+    const state = JSON.parse(row.state_json) as { inPosition?: boolean; entryPriceCents?: number };
     return {
       traderId: row.id,
       name: row.name,
@@ -239,6 +241,8 @@ function computeLeaderboard(raw: BetterSqlite3.Database): PalcoSnapshot["leaderb
       combinator: genome.combinator,
       genome: structuredGenome(genome),
       achievements: achievements.get(row.id) ?? [],
+      inPosition: state.inPosition === true,
+      entryPriceCents: state.inPosition === true ? state.entryPriceCents ?? null : null,
     };
   });
 }
