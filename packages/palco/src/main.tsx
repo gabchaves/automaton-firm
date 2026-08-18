@@ -3,6 +3,10 @@ import ReactDOM from "react-dom/client";
 import "primereact/resources/themes/lara-dark-green/theme.css";
 import "primereact/resources/primereact.min.css";
 import "primeicons/primeicons.css";
+// @xyflow/react's default theme (Empresa's org graph, v3 plan Task 3) —
+// loaded here, before theme.css, same rule as PrimeReact above: theme.css
+// overrides it via the --xy-* custom properties, never the reverse.
+import "@xyflow/react/dist/style.css";
 // pxpush identity fonts — bundled via @fontsource (self-hosted woff2, no
 // runtime Google Fonts/CDN request). MUST load before theme.css so the
 // @font-face declarations exist by the time theme.css's font-family rules

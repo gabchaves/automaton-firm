@@ -562,83 +562,6 @@ li.mural-post {
   margin-top: 6px;
 }
 
-.org-columns {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 24px;
-  margin-bottom: 32px;
-}
-
-@media (max-width: 720px) {
-  .org-columns {
-    grid-template-columns: 1fr;
-  }
-}
-
-.org-column h3.section-title {
-  margin: 0 0 10px;
-}
-
-/* Employee cards — same retro panel + title-bar treatment as the Mural's
- * post boxes (square avatar in the strip). */
-.employee-card {
-  display: flex;
-  flex-direction: column;
-  background: var(--black);
-  border: var(--border-fade);
-  border-radius: var(--radius);
-  overflow: hidden;
-  margin-bottom: 10px;
-}
-
-.employee-titlebar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: var(--ink);
-  color: var(--blue);
-  padding: 6px 10px;
-}
-
-.employee-avatar {
-  flex: 0 0 auto;
-  width: 28px;
-  height: 28px;
-  border-radius: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  font-weight: bold;
-  color: var(--ink);
-}
-
-.employee-name {
-  font-weight: 500;
-  color: var(--blue);
-}
-
-.employee-info {
-  padding: 10px 14px 12px;
-}
-
-.employee-cargo {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--lightgrey);
-}
-
-.employee-book {
-  margin-top: 2px;
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
-  font-size: 13px;
-  color: var(--ink);
-}
-
 .status-chip {
   font-family: var(--font-mono);
   font-size: 9.5px;
@@ -670,16 +593,118 @@ li.mural-post {
   color: var(--lightgrey);
 }
 
-.lineage-line {
-  margin-top: 6px;
-  font-family: var(--font-mono);
-  font-size: 11.5px;
-  color: var(--lightgrey);
-  font-style: normal;
+/* ---------- Empresa: org graph (v3 Task 3 — @xyflow/react) ---------- */
+
+/* Fixed-height canvas so the graph has real pan/zoom room; background
+ * matches the other Empresa/Pregão panels (--black) — the page's own
+ * static grain overlay (.page::after, z-index 50) still paints on top of
+ * it same as every other panel, so deliberately NOT rendering xyflow's
+ * <Background> component (see OrgGraph.tsx) is what "our grain shows
+ * through" means here, not a transparent container. */
+.org-graph-panel {
+  height: 480px;
+  background: var(--black);
+  border: var(--border-fade);
+  margin-bottom: 32px;
 }
 
-.employee-genome {
-  margin-top: 8px;
+/* Re-theme xyflow via its own --xy-* custom properties (scoped to this
+ * panel) rather than fighting individual .react-flow__* rules — every
+ * color/shadow in dist/style.css reads through one of these tokens. */
+.org-graph-panel .react-flow {
+  --xy-edge-stroke-default: hsla(0, 0%, 100%, 0.3);
+  --xy-edge-stroke-width-default: 1;
+  --xy-edge-stroke-selected-default: var(--green);
+  --xy-edge-label-background-color-default: var(--black);
+  --xy-edge-label-color-default: var(--lightgrey);
+  --xy-attribution-background-color-default: transparent;
+  --xy-controls-button-background-color-default: var(--black);
+  --xy-controls-button-background-color-hover-default: var(--ink);
+  --xy-controls-button-color-default: var(--ink);
+  --xy-controls-button-color-hover-default: var(--bg);
+  --xy-controls-button-border-color-default: var(--border-color-fade);
+  --xy-controls-box-shadow-default: none;
+}
+
+.org-graph-panel .react-flow__attribution a {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--lightgrey);
+}
+
+/* Handles exist for edge geometry only — this is a read-only diagram, not
+ * an editor, so the connection dots stay invisible. */
+.org-node-handle {
+  opacity: 0;
+}
+
+.org-rh-node {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  background: var(--cream);
+  color: var(--black);
+  border: var(--border-fade);
+  font-family: var(--font-display);
+  font-size: 20px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.org-node {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 100%;
+  background: var(--black);
+  border: var(--border-fade);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+  overflow: hidden;
+}
+
+.org-node-dim {
+  opacity: 0.55;
+}
+
+.org-node-avatar {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  border-radius: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: bold;
+  color: var(--ink);
+}
+
+.org-node-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.org-node-name {
+  font-weight: 500;
+  color: var(--ink);
+  font-size: 12.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.org-node-book {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 11.5px;
+  color: var(--green);
 }
 
 ul.history-timeline {
