@@ -1,7 +1,11 @@
 import { useState } from "react";
+import { motion } from "framer-motion";
 import { useSnapshot } from "./useSnapshot";
 import { usd } from "./format";
-import { AnimatedValue } from "./AnimatedValue";
+import { NumberTicker } from "./components/NumberTicker";
+import { TickerTape } from "./components/TickerTape";
+import { ShineBorder } from "./components/ShineBorder";
+import { Confetti } from "./components/Confetti";
 import { PregaoTab } from "./tabs/PregaoTab";
 import { LeaderboardTab } from "./tabs/LeaderboardTab";
 import { GeracoesTab } from "./tabs/GeracoesTab";
@@ -12,7 +16,27 @@ import { SobreTab } from "./tabs/SobreTab";
 const VIRGIN_DAYS_GATE = 90;
 const DEFAULT_EQUITY_MC = 10_000_000; // $100.00, matches the Motor's seed equity
 
-// Formatters for AnimatedValue's non-money hero numbers (money ones reuse
+// v3.2 plan: ShineBorder lights up the "Recorde (pico)" hero card only for
+// a genuine new record ABOVE the $100 seed — never for the seed value
+// itself, which every fresh generation starts at.
+const RECORD_SHINE_THRESHOLD_MC = DEFAULT_EQUITY_MC;
+
+// Tab-content crossfade (Commit 1's micro-animations pass) and the hero
+// strip's stagger-in on first load — both transform/opacity-only tweens,
+// per the plan's performance discipline.
+const TAB_CROSSFADE_DURATION_S = 0.12;
+const HERO_STAGGER_DELAY_S = 0.05;
+const HERO_ENTER_DURATION_S = 0.3;
+
+function heroCardMotionProps(index: number) {
+  return {
+    initial: { opacity: 0, y: 8 },
+    animate: { opacity: 1, y: 0 },
+    transition: { duration: HERO_ENTER_DURATION_S, delay: index * HERO_STAGGER_DELAY_S, ease: "easeOut" as const },
+  };
+}
+
+// Formatters for NumberTicker's non-money hero numbers (money ones reuse
 // `usd` directly).
 function formatCount(n: number): string {
   return Math.round(n).toString();
@@ -41,8 +65,12 @@ export default function App() {
   const cards = snapshot?.cards;
   const [route, setRoute] = useState<Route>("pregao");
 
+  const recordEvolvedMc = cards?.recordEvolvedMc ?? 0;
+
   return (
     <div className="page">
+      <Confetti feed={snapshot?.feed ?? []} />
+
       <header className="site-header">
         <div className="nav-bar">
           <div className="wordmark">
@@ -70,62 +98,82 @@ export default function App() {
           </div>
         </div>
 
+        <TickerTape feed={snapshot?.feed ?? []} />
+
         <section className="hero-strip">
-          <div className="hero-card">
+          <motion.div className="hero-card" {...heroCardMotionProps(0)}>
             <div className="label">Equity da firma</div>
             <div className="v">
-              <AnimatedValue value={cards?.evolvedEquityMc ?? DEFAULT_EQUITY_MC} format={usd} />
+              <NumberTicker value={cards?.evolvedEquityMc ?? DEFAULT_EQUITY_MC} format={usd} />
             </div>
             <div className="d">Geração {cards?.evolvedGen ?? "–"}</div>
-          </div>
-          <div className="hero-card">
+          </motion.div>
+          <motion.div className="hero-card" {...heroCardMotionProps(1)}>
             <div className="label">Controle aleatório</div>
             <div className="v">
-              <AnimatedValue value={cards?.randomEquityMc ?? DEFAULT_EQUITY_MC} format={usd} />
+              <NumberTicker value={cards?.randomEquityMc ?? DEFAULT_EQUITY_MC} format={usd} />
             </div>
             <div className="d">Geração {cards?.randomGen ?? "–"}</div>
-          </div>
-          <div className="hero-card">
+          </motion.div>
+          <motion.div className="hero-card" {...heroCardMotionProps(2)}>
             <div className="label">Não fazer nada</div>
             <div className="v">$100.00</div>
             <div className="d">o piso honesto</div>
-          </div>
-          <div className="hero-card">
-            <div className="label">Recorde (pico)</div>
-            <div className="v">
-              <AnimatedValue value={cards?.recordEvolvedMc ?? 0} format={usd} />
-            </div>
-            <div className="d">
-              controle: <AnimatedValue value={cards?.recordRandomMc ?? 0} format={usd} />
-            </div>
-          </div>
-          <div className="hero-card">
+          </motion.div>
+          <ShineBorder active={recordEvolvedMc > RECORD_SHINE_THRESHOLD_MC}>
+            <motion.div className="hero-card" {...heroCardMotionProps(3)}>
+              <div className="label">Recorde (pico)</div>
+              <div className="v">
+                <NumberTicker value={recordEvolvedMc} format={usd} />
+              </div>
+              <div className="d">
+                controle: <NumberTicker value={cards?.recordRandomMc ?? 0} format={usd} />
+              </div>
+            </motion.div>
+          </ShineBorder>
+          <motion.div className="hero-card" {...heroCardMotionProps(4)}>
             <div className="label">Gerações vividas</div>
             <div className="v">
-              <AnimatedValue value={cards?.gensEvolved ?? 0} format={formatCount} />{" "}
+              <NumberTicker value={cards?.gensEvolved ?? 0} format={formatCount} />{" "}
               <small>
-                / <AnimatedValue value={cards?.gensRandom ?? 0} format={formatCount} />
+                / <NumberTicker value={cards?.gensRandom ?? 0} format={formatCount} />
               </small>
             </div>
             <div className="d">firma / controle</div>
-          </div>
-          <div className="hero-card">
+          </motion.div>
+          <motion.div className="hero-card" {...heroCardMotionProps(5)}>
             <div className="label">Dados virgens</div>
             <div className="v">
-              <AnimatedValue value={cards?.virginDays ?? 0} format={formatOneDecimal} />
+              <NumberTicker value={cards?.virginDays ?? 0} format={formatOneDecimal} />
             </div>
             <div className="d">de {VIRGIN_DAYS_GATE} dias</div>
-          </div>
+          </motion.div>
         </section>
       </header>
 
       <main className="page-content">
-        {route === "pregao" && <PregaoTab snapshot={snapshot} />}
-        {route === "leaderboard" && <LeaderboardTab snapshot={snapshot} />}
-        {route === "empresa" && <EmpresaTab snapshot={snapshot} />}
-        {route === "geracoes" && <GeracoesTab snapshot={snapshot} />}
-        {route === "mural" && <MuralTab snapshot={snapshot} />}
-        {route === "sobre" && <SobreTab snapshot={snapshot} />}
+        {/*
+          Fade-in only (no AnimatePresence/`exit`) — deliberately: with an
+          exit-and-wait choreography the incoming tab's content only mounts
+          once the outgoing tab's exit animation finishes, which would make
+          every nav click asynchronous. React's normal synchronous
+          mount/unmount on `route` changes is what the rest of this app
+          (and its tests) expect; `key={route}` still replays this fade
+          every time the visible tab changes, just without an exit phase.
+        */}
+        <motion.div
+          key={route}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: TAB_CROSSFADE_DURATION_S }}
+        >
+          {route === "pregao" && <PregaoTab snapshot={snapshot} />}
+          {route === "leaderboard" && <LeaderboardTab snapshot={snapshot} />}
+          {route === "empresa" && <EmpresaTab snapshot={snapshot} />}
+          {route === "geracoes" && <GeracoesTab snapshot={snapshot} />}
+          {route === "mural" && <MuralTab snapshot={snapshot} />}
+          {route === "sobre" && <SobreTab snapshot={snapshot} />}
+        </motion.div>
       </main>
 
       <footer className="honesty">

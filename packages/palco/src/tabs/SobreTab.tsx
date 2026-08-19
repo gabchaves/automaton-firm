@@ -1,4 +1,5 @@
 import type { PalcoSnapshot } from "../types";
+import { NumberTicker } from "../components/NumberTicker";
 
 interface SobreTabProps {
   snapshot: PalcoSnapshot | null;
@@ -60,9 +61,19 @@ export function SobreTab({ snapshot }: SobreTabProps) {
 
         <div className="sobre-facts">
           <span className="sobre-fact">
-            {virginDays !== undefined ? virginDays.toFixed(1) : "–"} dias de dados virgens
+            {virginDays !== undefined ? (
+              <NumberTicker value={virginDays} format={(n) => `${n.toFixed(1)} dias de dados virgens`} />
+            ) : (
+              "– dias de dados virgens"
+            )}
           </span>
-          <span className="sobre-fact">geração {gensEvolved ?? "–"} no ar</span>
+          <span className="sobre-fact">
+            {gensEvolved !== undefined ? (
+              <NumberTicker value={gensEvolved} format={(n) => `geração ${Math.round(n)} no ar`} />
+            ) : (
+              "geração – no ar"
+            )}
+          </span>
           <span className="sobre-fact">$100 por geração, sempre</span>
         </div>
 

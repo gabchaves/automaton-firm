@@ -19,6 +19,10 @@ import "@fontsource/geist-mono/index.css"; // mono: labels, numbers, timestamps
 // theme/base CSS (and the font-face imports above) so the token overrides
 // and fonts both win.
 import "./theme.css";
+// Tailwind v4 utilities LAST — scoped to the new Magic-UI-style components
+// only (v3.2 plan); theme.css's hand-authored pxpush rules above still win
+// for everything else since Tailwind's utilities are opt-in per class.
+import "./tw.css";
 import App from "./App";
 
 const rootEl = document.getElementById("root");

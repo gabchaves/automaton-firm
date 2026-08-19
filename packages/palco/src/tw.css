@@ -1,0 +1,57 @@
+/* Tailwind v4, CSS-first setup (v3.2 plan) — imported in main.tsx AFTER
+ * theme.css. Tailwind utility classes are reserved for the NEW Magic-UI-
+ * style components (NumberTicker, Marquee, ShineBorder, Confetti) and their
+ * call sites; theme.css's hand-authored pxpush identity rules are the
+ * source of truth for everything else and are never rewritten in Tailwind.
+ *
+ * The @theme block below maps our existing pxpush design tokens (theme.css's
+ * :root custom properties) into Tailwind's theme namespace so utilities like
+ * `bg-bg`, `text-green`, `font-display` read the SAME palette/type system —
+ * no second, drifting color scale.
+ */
+@import "tailwindcss";
+
+@theme {
+  --color-bg: #1a1a1a;
+  --color-ink: #bababa;
+  --color-black: #111111;
+  --color-green: #58a27a;
+  --color-terminal: #0f0;
+  --color-red: #ff001a;
+  --color-blue: #03049c;
+  --color-lightblue: #9fe4f3;
+  --color-lightgrey: #71737d;
+
+  --font-display: "Anton", Impact, sans-serif;
+  --font-body: "Archivo", Helvetica, Arial, sans-serif;
+  --font-mono: "Geist Mono", Consolas, monospace;
+
+  /* Marquee.tsx's ticker-tape loop — the ONE continuous/looping animation
+   * budget in this app (theme.css's header note rules out others besides
+   * the live-dot pulse; a stock ticker earns the exception). transform-only,
+   * compositor-friendly. */
+  --animate-marquee: marquee 32s linear infinite;
+
+  /* ShineBorder.tsx's record-card sweep — deliberately has NO `infinite`,
+   * so it plays exactly once per mount (see ShineBorder.tsx's doc comment:
+   * this is a one-shot embellishment, not a second continuous loop). */
+  --animate-shine: shine 2.2s ease-in-out 1;
+}
+
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@keyframes shine {
+  from {
+    background-position: 200% 0%;
+  }
+  to {
+    background-position: -200% 0%;
+  }
+}
