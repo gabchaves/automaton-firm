@@ -82,14 +82,10 @@ describe("App", () => {
     expect(screen.getByRole("button", { name: "Sobre" })).toHaveAttribute("aria-current", "page");
   });
 
-  it("shows the honesty footer verbatim", async () => {
+  it("does NOT render the global honesty footer (it moved to the Sobre tab)", async () => {
     render(<App />);
 
     expect(await screen.findByText("A Firma")).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        /Dinheiro real só entra em discussão se a linhagem evoluída vencer o controle aleatório E o não-fazer-nada por ≥ 3 meses de dados virgens ao vivo, fora da banda de ruído\./,
-      ),
-    ).toBeInTheDocument();
+    expect(screen.queryByText(/Dinheiro real só entra em discussão/)).toBeNull();
   });
 });

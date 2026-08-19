@@ -176,12 +176,6 @@ export default function App() {
         </motion.div>
       </main>
 
-      <footer className="honesty">
-        <p>
-          Dinheiro real só entra em discussão se a linhagem evoluída vencer o controle aleatório E
-          o não-fazer-nada por ≥ 3 meses de dados virgens ao vivo, fora da banda de ruído.
-        </p>
-      </footer>
     </div>
   );
 }

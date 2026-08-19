@@ -1483,3 +1483,20 @@ ul.trade-feed .ts {
 .sobre-footer-chip {
   margin-top: 12px;
 }
+
+/* Golden rule block — the honesty banner's new home inside the Sobre tab
+ * (moved from the global footer at the owner's request). Same --blue band
+ * identity the footer had. */
+.sobre-golden-rule {
+  margin: 22px 0 18px;
+  background: var(--blue);
+  padding: 14px 18px 16px;
+  max-width: 72ch;
+}
+.sobre-golden-rule p {
+  margin: 8px 0 0;
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+}

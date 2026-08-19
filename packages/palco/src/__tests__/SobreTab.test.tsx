@@ -13,6 +13,14 @@ describe("SobreTab", () => {
     expect(screen.queryByText(/98186/)).not.toBeInTheDocument();
   });
 
+  it("carries the golden rule (moved from the global footer) and puts the project first", () => {
+    render(<SobreTab snapshot={fixtureSnapshot} />);
+
+    expect(screen.getByText(/Dinheiro real só entra em discussão/)).toBeInTheDocument();
+    const titles = screen.getAllByText(/^(O projeto|Quem constrói)$/).map((el) => el.textContent);
+    expect(titles).toEqual(["O projeto", "Quem constrói"]);
+  });
+
   it("renders the mailto contact link and LinkedIn as plain text (no phone, no LinkedIn URL)", () => {
     render(<SobreTab snapshot={fixtureSnapshot} />);
 
