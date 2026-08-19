@@ -6,13 +6,21 @@ import type { PalcoSnapshot } from "../types";
 import { usd } from "../format";
 import { initials, avatarBackground } from "../avatar";
 import { moodEmoji, STAKE_MC } from "../mood";
+import {
+  orderLeaderboardRows, isDividerRow, isLiveRankedRow,
+  type DisplayRow, type RankedRow,
+} from "../leaderboard-order";
 
 interface LeaderboardTabProps {
   snapshot: PalcoSnapshot | null;
 }
 
-type LeaderboardEntry = PalcoSnapshot["leaderboard"][number];
-type RankedRow = LeaderboardEntry & { rank: number; id: string };
+/** Renders `render` for a real trader row, `null` (an empty cell) for the
+ * synthetic "encerrados" divider row — used by every Column except "Nome",
+ * which renders the divider's own label instead. */
+function renderCell<T>(row: DisplayRow, render: (row: RankedRow) => T): T | null {
+  return isDividerRow(row) ? null : render(row);
+}
 
 const STATUS_PT: Record<string, string> = {
   live: "vivo",
@@ -44,7 +52,7 @@ function pnlClass(mc: number): string {
  * that actually animates rank reordering — the DataTable itself just
  * re-renders in the new order underneath it.
  */
-function PodiumStrip({ rows, stakeMc }: { rows: RankedRow[]; stakeMc: number }) {
+function PodiumStrip({ rows, stakeMc }: { rows: (RankedRow & { rank: number })[]; stakeMc: number }) {
   const top3 = rows.slice(0, 3);
   if (top3.length === 0) return null;
 
@@ -76,11 +84,12 @@ function PodiumStrip({ rows, stakeMc }: { rows: RankedRow[]; stakeMc: number }) 
  * (too abstract per user feedback) are gone; achievements shrink to a
  * single mono badge, and rank/mood/P&L% replace them. */
 export function LeaderboardTab({ snapshot }: LeaderboardTabProps) {
-  const rows: RankedRow[] = (snapshot?.leaderboard ?? []).map((trader, index) => ({
-    ...trader,
-    rank: index + 1,
-    id: `${trader.cohort}-${trader.genNumber}-${trader.name}-${index}`,
-  }));
+  // Sorted explicitly on the client (cinto e suspensório — see
+  // leaderboard-order.ts): live rows first, then fired, then dead, within
+  // each cohort; a divider marker sits between the two tiers when the
+  // cohort actually has a non-live row.
+  const displayRows: DisplayRow[] = orderLeaderboardRows(snapshot?.leaderboard ?? []);
+  const liveRows = displayRows.filter(isLiveRankedRow);
   // Sane fallback (STAKE_MC) while there's no snapshot yet; every real
   // render derives from cards.traderStartMc instead, so a bankroll scale
   // change never touches this file again.
@@ -88,71 +97,96 @@ export function LeaderboardTab({ snapshot }: LeaderboardTabProps) {
 
   return (
     <div>
-      <PodiumStrip rows={rows} stakeMc={stakeMc} />
+      <PodiumStrip rows={liveRows.slice(0, 3)} stakeMc={stakeMc} />
 
-      <DataTable value={rows} dataKey="id" className="leaderboard-table">
+      <DataTable
+        value={displayRows}
+        dataKey="id"
+        className="leaderboard-table"
+        rowClassName={(row: DisplayRow) => {
+          if (isDividerRow(row)) return "leaderboard-divider-row";
+          return row.status !== "live" ? "leaderboard-row-muted" : "";
+        }}
+      >
         <Column
           header="#"
-          body={(row: RankedRow) =>
-            row.rank <= 3 ? (
-              <span className="rank-chip">{row.rank}</span>
-            ) : (
-              <span className="rank-plain">{row.rank}</span>
+          body={(row: DisplayRow) =>
+            renderCell(row, (r) =>
+              r.rank === null ? null : r.rank <= 3 ? (
+                <span className="rank-chip">{r.rank}</span>
+              ) : (
+                <span className="rank-plain">{r.rank}</span>
+              ),
             )
           }
           style={{ width: "3rem" }}
         />
         <Column
           header="Nome"
-          body={(row: RankedRow) => (
-            <span className="row-name-cell">
-              <span className="mini-avatar" style={{ background: avatarBackground(row.name) }}>
-                {initials(row.name)}
+          body={(row: DisplayRow) =>
+            isDividerRow(row) ? (
+              <span className="leaderboard-divider-label">— encerrados —</span>
+            ) : (
+              <span className="row-name-cell">
+                <span className="mini-avatar" style={{ background: avatarBackground(row.name) }}>
+                  {initials(row.name)}
+                </span>
+                <span className="row-name-text">
+                  {row.name}
+                  <span className="mood-emoji">{moodEmoji(row.status, row.bookMc, stakeMc)}</span>
+                  {row.achievements.length > 0 && (
+                    <span className="achv-badge" title={row.achievements.join(", ")}>
+                      ✨{row.achievements.length}
+                    </span>
+                  )}
+                </span>
               </span>
-              <span className="row-name-text">
-                {row.name}
-                <span className="mood-emoji">{moodEmoji(row.status, row.bookMc, stakeMc)}</span>
-                {row.achievements.length > 0 && (
-                  <span className="achv-badge" title={row.achievements.join(", ")}>
-                    ✨{row.achievements.length}
-                  </span>
-                )}
-              </span>
-            </span>
-          )}
+            )
+          }
         />
         <Column
           header="Time"
-          body={(row: RankedRow) => (
-            <Tag
-              value={row.cohort === "evolved" ? "firma" : "controle"}
-              severity={row.cohort === "evolved" ? "success" : "secondary"}
-            />
-          )}
+          body={(row: DisplayRow) =>
+            renderCell(row, (r) => (
+              <Tag
+                value={r.cohort === "evolved" ? "firma" : "controle"}
+                severity={r.cohort === "evolved" ? "success" : "secondary"}
+              />
+            ))
+          }
         />
-        <Column header="Gen" body={(row: RankedRow) => `G${row.genNumber}`} />
+        <Column header="Gen" body={(row: DisplayRow) => renderCell(row, (r) => `G${r.genNumber}`)} />
         <Column
           header="Status"
-          body={(row: RankedRow) => (
-            <span className={`status-chip ${STATUS_CLASS[row.status] ?? ""}`}>
-              {STATUS_ICON[row.status] ?? ""} {STATUS_PT[row.status] ?? row.status}
-            </span>
-          )}
+          body={(row: DisplayRow) =>
+            renderCell(row, (r) => (
+              <span className={`status-chip ${STATUS_CLASS[r.status] ?? ""}`}>
+                {STATUS_ICON[r.status] ?? ""} {STATUS_PT[r.status] ?? r.status}
+              </span>
+            ))
+          }
         />
-        <Column header="Book" body={(row: RankedRow) => <span className="mono-bold">{usd(row.bookMc)}</span>} />
+        <Column
+          header="Book"
+          body={(row: DisplayRow) => renderCell(row, (r) => <span className="mono-bold">{usd(r.bookMc)}</span>)}
+        />
         <Column
           header="P&L realizado"
-          body={(row: RankedRow) => <span className={pnlClass(row.realizedPnlMc)}>{usd(row.realizedPnlMc)}</span>}
+          body={(row: DisplayRow) =>
+            renderCell(row, (r) => <span className={pnlClass(r.realizedPnlMc)}>{usd(r.realizedPnlMc)}</span>)
+          }
         />
         <Column
           header="P&L %"
-          body={(row: RankedRow) => {
-            const pct = (row.realizedPnlMc / stakeMc) * 100;
-            return <span className={pnlClass(row.realizedPnlMc)}>{pct.toFixed(1)}%</span>;
-          }}
+          body={(row: DisplayRow) =>
+            renderCell(row, (r) => {
+              const pct = (r.realizedPnlMc / stakeMc) * 100;
+              return <span className={pnlClass(r.realizedPnlMc)}>{pct.toFixed(1)}%</span>;
+            })
+          }
         />
-        <Column header="Trades" field="tradesCount" />
-        <Column header="Mesa" body={(row: RankedRow) => `${row.symbol} · ${row.leverage}x`} />
+        <Column header="Trades" body={(row: DisplayRow) => renderCell(row, (r) => r.tradesCount)} />
+        <Column header="Mesa" body={(row: DisplayRow) => renderCell(row, (r) => `${r.symbol} · ${r.leverage}x`)} />
       </DataTable>
     </div>
   );

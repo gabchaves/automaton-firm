@@ -393,3 +393,117 @@ describe("buildSnapshot: leaderboard open positions", () => {
     expect(flat?.entryPriceCents).toBeNull();
   });
 });
+
+const HOUR_MS = 3_600_000;
+const DAY_MS = 86_400_000;
+
+function tradeClosedEvent(overrides: {
+  ts: number; traderId: string; generationId: string;
+  symbol?: string; realizedPnlMc?: number;
+}): Parameters<MotorDb["insertEvent"]>[0] {
+  return {
+    ts: overrides.ts, type: "trade_closed", traderId: overrides.traderId, generationId: overrides.generationId,
+    payloadJson: JSON.stringify({
+      symbol: overrides.symbol ?? "BTCUSDT", priceCents: 100, realizedPnlMc: overrides.realizedPnlMc ?? 0,
+      feeMc: 10, liquidated: false,
+    }),
+  };
+}
+
+describe("buildSnapshot: pregao windowed P&L", () => {
+  test("pnl1hMc/pnl24hMc = latest equity minus the nearest snapshot at/before the window boundary, per cohort independently", () => {
+    const d = fresh();
+    const nowMs = 200_000_000;
+
+    d.insertEquitySnapshot(0, "evolved", 100_000_000);
+    d.insertEquitySnapshot(nowMs - DAY_MS, "evolved", 105_000_000); // 24h boundary, exactly at ts
+    d.insertEquitySnapshot(nowMs - HOUR_MS, "evolved", 118_000_000); // 1h boundary, exactly at ts
+    d.insertEquitySnapshot(nowMs, "evolved", 120_000_000); // latest
+
+    d.insertEquitySnapshot(0, "random", 100_000_000);
+    d.insertEquitySnapshot(nowMs - DAY_MS, "random", 95_000_000);
+    d.insertEquitySnapshot(nowMs - HOUR_MS, "random", 97_000_000);
+    d.insertEquitySnapshot(nowMs, "random", 96_000_000);
+
+    const snap = buildSnapshot(d.raw, nowMs);
+
+    expect(snap.pregao.evolved.pnl1hMc).toBe(2_000_000); // 120M - 118M
+    expect(snap.pregao.evolved.pnl24hMc).toBe(15_000_000); // 120M - 105M
+    expect(snap.pregao.random.pnl1hMc).toBe(-1_000_000); // 96M - 97M
+    expect(snap.pregao.random.pnl24hMc).toBe(1_000_000); // 96M - 95M
+  });
+});
+
+describe("buildSnapshot: pregao windowed trades + win rate", () => {
+  test("trades1h/trades24h/winRate24h count only trade_closed events for that cohort inside the window", () => {
+    const d = fresh();
+    const nowMs = 200_000_000;
+    d.insertGeneration(generationRow({ id: "g1", cohort: "evolved", genNumber: 1, startedAt: 0, endedAt: null }));
+    d.insertGeneration(generationRow({ id: "gr1", cohort: "random", genNumber: 1, startedAt: 0, endedAt: null }));
+    d.insertTrader(traderRow({ id: "e1", generationId: "g1", cohort: "evolved" }));
+    d.insertTrader(traderRow({ id: "e2", generationId: "g1", cohort: "evolved", slot: 1 }));
+    d.insertTrader(traderRow({ id: "r1", generationId: "gr1", cohort: "random" }));
+
+    // Inside the 1h window (and therefore inside 24h too): a win and a loss.
+    d.insertEvent(tradeClosedEvent({ ts: nowMs, traderId: "e1", generationId: "g1", realizedPnlMc: 5_000 }));
+    d.insertEvent(tradeClosedEvent({ ts: nowMs - HOUR_MS / 2, traderId: "e2", generationId: "g1", realizedPnlMc: -2_000 }));
+    // Outside 1h but inside 24h: another win.
+    d.insertEvent(tradeClosedEvent({ ts: nowMs - HOUR_MS - 1_000, traderId: "e1", generationId: "g1", realizedPnlMc: 3_000 }));
+    // Outside 24h entirely: must not count anywhere.
+    d.insertEvent(tradeClosedEvent({ ts: nowMs - DAY_MS - 1_000, traderId: "e1", generationId: "g1", realizedPnlMc: 1_000 }));
+    // Random cohort trade inside both windows — must stay out of evolved's stats.
+    d.insertEvent(tradeClosedEvent({ ts: nowMs, traderId: "r1", generationId: "gr1", realizedPnlMc: 500 }));
+
+    const snap = buildSnapshot(d.raw, nowMs);
+
+    expect(snap.pregao.evolved.trades1h).toBe(2);
+    expect(snap.pregao.evolved.trades24h).toBe(3);
+    expect(snap.pregao.evolved.winRate24h).toBeCloseTo(2 / 3, 10); // 2 wins (5_000, 3_000) of 3 trades
+
+    expect(snap.pregao.random.trades1h).toBe(1);
+    expect(snap.pregao.random.trades24h).toBe(1);
+    expect(snap.pregao.random.winRate24h).toBe(1); // the one random trade was a win
+  });
+});
+
+describe("buildSnapshot: pregao bySymbol24h", () => {
+  test("groups evolved trade_closed events by symbol within 24h; all three symbols always present, evolved-only, window-bounded", () => {
+    const d = fresh();
+    const nowMs = 200_000_000;
+    d.insertGeneration(generationRow({ id: "g1", cohort: "evolved", genNumber: 1, startedAt: 0, endedAt: null }));
+    d.insertGeneration(generationRow({ id: "gr1", cohort: "random", genNumber: 1, startedAt: 0, endedAt: null }));
+    d.insertTrader(traderRow({ id: "e1", generationId: "g1", cohort: "evolved" }));
+    d.insertTrader(traderRow({ id: "r1", generationId: "gr1", cohort: "random" }));
+
+    d.insertEvent(tradeClosedEvent({ ts: nowMs, traderId: "e1", generationId: "g1", symbol: "BTCUSDT", realizedPnlMc: 50_000 }));
+    d.insertEvent(tradeClosedEvent({ ts: nowMs - 1000, traderId: "e1", generationId: "g1", symbol: "BTCUSDT", realizedPnlMc: -10_000 }));
+    d.insertEvent(tradeClosedEvent({ ts: nowMs - 2000, traderId: "e1", generationId: "g1", symbol: "ETHUSDT", realizedPnlMc: 7_000 }));
+    // Outside the 24h window — must not be folded into BTCUSDT's total.
+    d.insertEvent(tradeClosedEvent({ ts: nowMs - DAY_MS - 1_000, traderId: "e1", generationId: "g1", symbol: "BTCUSDT", realizedPnlMc: 999_999 }));
+    // Random cohort — must not leak into the (evolved-only) bySymbol24h.
+    d.insertEvent(tradeClosedEvent({ ts: nowMs, traderId: "r1", generationId: "gr1", symbol: "SOLUSDT", realizedPnlMc: 1_000_000 }));
+
+    const snap = buildSnapshot(d.raw, nowMs);
+
+    expect(snap.pregao.bySymbol24h).toEqual([
+      { symbol: "BTCUSDT", pnlMc: 40_000, trades: 2 }, // 50_000 - 10_000
+      { symbol: "ETHUSDT", pnlMc: 7_000, trades: 1 },
+      { symbol: "SOLUSDT", pnlMc: 0, trades: 0 }, // no evolved trades on this symbol -> present at zero
+    ]);
+  });
+});
+
+describe("buildSnapshot: pregao zero-history fallback", () => {
+  test("fresh DB with no equity snapshots or trades: pnl is 0 (DEFAULT_EQUITY_MC - DEFAULT_EQUITY_MC), counts 0, winRate 0, all three symbols present at 0", () => {
+    const d = fresh();
+    const snap = buildSnapshot(d.raw, 999_000);
+
+    expect(snap.pregao.evolved).toEqual({ pnl1hMc: 0, pnl24hMc: 0, trades1h: 0, trades24h: 0, winRate24h: 0 });
+    expect(snap.pregao.random).toEqual({ pnl1hMc: 0, pnl24hMc: 0, trades1h: 0, trades24h: 0, winRate24h: 0 });
+    expect(snap.pregao.bySymbol24h).toEqual([
+      { symbol: "BTCUSDT", pnlMc: 0, trades: 0 },
+      { symbol: "ETHUSDT", pnlMc: 0, trades: 0 },
+      { symbol: "SOLUSDT", pnlMc: 0, trades: 0 },
+    ]);
+  });
+});

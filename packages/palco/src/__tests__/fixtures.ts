@@ -212,6 +212,18 @@ export const fixtureSnapshot: PalcoSnapshot = {
       payload: { symbol: "ETHUSDT", priceCents: 295_000, realizedPnlMc: -1_000, feeMc: 10, liquidated: false },
     },
   ],
+  pregao: {
+    evolved: { pnl1hMc: 45_000, pnl24hMc: 120_000, trades1h: 3, trades24h: 14, winRate24h: 9 / 14 },
+    random: { pnl1hMc: -8_000, pnl24hMc: -12_400, trades1h: 1, trades24h: 9, winRate24h: 3 / 9 },
+    bySymbol24h: [
+      { symbol: "BTCUSDT", pnlMc: 90_000, trades: 9 },
+      { symbol: "ETHUSDT", pnlMc: 30_000, trades: 5 },
+      // Deliberately zero — no evolved trades on this mesa in the window —
+      // proves the front always lists all three symbols, never just the
+      // ones with activity.
+      { symbol: "SOLUSDT", pnlMc: 0, trades: 0 },
+    ],
+  },
   org: {
     hrPolicy:
       "RH baseado em evidência: compara cada trader ao benchmark max(controle aleatório, não fazer nada) na mesma janela de 7 dias. Demite só com evidência clara de underperformance; evidência insuficiente nunca demite nem promove.",

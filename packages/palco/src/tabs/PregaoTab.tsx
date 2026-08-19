@@ -11,6 +11,7 @@ import type { PalcoSnapshot } from "../types";
 import { dateShort, usd, centsToUsd } from "../format";
 import { initials, avatarBackground } from "../avatar";
 import { moodEmoji, STAKE_MC } from "../mood";
+import { NumberTicker } from "../components/NumberTicker";
 
 ChartJS.register(LinearScale, PointElement, LineElement, Tooltip, Legend);
 
@@ -45,6 +46,104 @@ function pnlRowClass(item: { type: string; payload: Record<string, unknown> }): 
   if (pnl > 0) return "pnl-pos";
   if (pnl < 0) return "pnl-neg";
   return "";
+}
+
+const EMPTY_WINDOW_STATS: PalcoSnapshot["pregao"]["evolved"] = {
+  pnl1hMc: 0, pnl24hMc: 0, trades1h: 0, trades24h: 0, winRate24h: 0,
+};
+
+// Fallback while there's no snapshot yet — mirrors the shape the Motor
+// always sends (all three symbols present, even at 0/0).
+const EMPTY_BY_SYMBOL_24H: PalcoSnapshot["pregao"]["bySymbol24h"] = [
+  { symbol: "BTCUSDT", pnlMc: 0, trades: 0 },
+  { symbol: "ETHUSDT", pnlMc: 0, trades: 0 },
+  { symbol: "SOLUSDT", pnlMc: 0, trades: 0 },
+];
+
+// Formatters for NumberTicker's non-money Pregão stat-cards (money ones
+// reuse `usd` directly, same convention as App.tsx's hero strip).
+function formatCount(n: number): string {
+  return Math.round(n).toString();
+}
+
+function formatWinRate(rate: number): string {
+  return `${(rate * 100).toFixed(1)}%`;
+}
+
+/** `.hero-card .v` is green by default (see theme.css) — this only adds
+ * the `pnl-neg` override class when the value is negative, same red/green
+ * "verde/vermelho pelo sinal" convention used by the trades list and the
+ * Leaderboard's P&L column. */
+function pnlValueClass(mc: number): string {
+  return mc < 0 ? "v pnl-neg" : "v";
+}
+
+/**
+ * Windowed stat-cards for one cohort — Task A2 of the v4 plan: "lucro na
+ * última hora etc" was the user's literal ask. Reuses `.hero-card` as-is
+ * (same visual as the top hero strip), just laid out in a smaller row
+ * scoped to this cohort instead of inventing a new card style.
+ */
+function CohortStatsGroup({ title, stats }: { title: string; stats: PalcoSnapshot["pregao"]["evolved"] }) {
+  return (
+    <div className="cohort-stats-group">
+      <span className="label">{title}</span>
+      <div className="pregao-stats-strip">
+        <div className="hero-card">
+          <div className="label">Lucro 1h</div>
+          <div className={pnlValueClass(stats.pnl1hMc)}>
+            <NumberTicker value={stats.pnl1hMc} format={usd} />
+          </div>
+        </div>
+        <div className="hero-card">
+          <div className="label">Lucro 24h</div>
+          <div className={pnlValueClass(stats.pnl24hMc)}>
+            <NumberTicker value={stats.pnl24hMc} format={usd} />
+          </div>
+        </div>
+        <div className="hero-card">
+          <div className="label">Trades 24h</div>
+          <div className="v">
+            <NumberTicker value={stats.trades24h} format={formatCount} />
+          </div>
+        </div>
+        <div className="hero-card">
+          <div className="label">Win rate 24h</div>
+          <div className="v">
+            <NumberTicker value={stats.winRate24h} format={formatWinRate} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Per-mesa 24h P&L for the firm (evolved cohort only) — BTC/ETH/SOL always
+ * listed, 0/0 when a mesa had no trades in the window. */
+function SymbolPnlTable({ rows }: { rows: PalcoSnapshot["pregao"]["bySymbol24h"] }) {
+  return (
+    <section className="symbol-pnl-panel">
+      <h2 className="section-title">P&amp;L 24h por mesa</h2>
+      <table className="symbol-pnl-table">
+        <thead>
+          <tr>
+            <th>Mesa</th>
+            <th>P&amp;L</th>
+            <th>Trades</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.symbol}>
+              <td className="mono-bold">{row.symbol}</td>
+              <td className={row.pnlMc < 0 ? "pnl-value pnl-neg" : "pnl-value pnl-pos"}>{usd(row.pnlMc)}</td>
+              <td>{row.trades}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
+  );
 }
 
 /**
@@ -96,6 +195,9 @@ export function PregaoTab({ snapshot }: PregaoTabProps) {
   const seedMc = snapshot?.cards.genStartMc ?? 100_000_000;
   const stakeMc = snapshot?.cards.traderStartMc ?? STAKE_MC;
   const baselineUsd = seedMc / 100_000;
+  const pregaoEvolved = snapshot?.pregao.evolved ?? EMPTY_WINDOW_STATS;
+  const pregaoRandom = snapshot?.pregao.random ?? EMPTY_WINDOW_STATS;
+  const bySymbol24h = snapshot?.pregao.bySymbol24h ?? EMPTY_BY_SYMBOL_24H;
   const evolvedPoints = toPoints(snapshot?.equitySeries.evolved ?? []);
   const randomPoints = toPoints(snapshot?.equitySeries.random ?? []);
   const allTs = [...evolvedPoints, ...randomPoints].map((p) => p.x);
@@ -169,36 +271,45 @@ export function PregaoTab({ snapshot }: PregaoTabProps) {
   const positions = (snapshot?.leaderboard ?? []).filter((trader) => trader.inPosition);
 
   return (
-    <div className="pregao-grid">
-      <section className="pregao-chart-panel">
-        <h2 className="section-title">Curva de equity</h2>
-        <div className="chart-frame">
-          <Line data={data} options={options} />
-        </div>
+    <>
+      <section className="pregao-stats-section">
+        <CohortStatsGroup title="Firma" stats={pregaoEvolved} />
+        <CohortStatsGroup title="Controle" stats={pregaoRandom} />
       </section>
 
-      <div className="pregao-side">
-        <OpenPositionsPanel positions={positions} stakeMc={stakeMc} />
-
-        <section className="trades-panel">
-          <h2 className="section-title">Últimos trades</h2>
-          <ul className="trade-feed">
-            {trades.length === 0 && <li>Sem trades ainda.</li>}
-            {trades.slice(0, MAX_TRADE_ITEMS).map((item) => (
-              <li key={item.id} className={pnlRowClass(item)}>
-                <span className="ts">{dateShort(item.ts)}</span>
-                {/*
-                  Safe: item.html is produced server-side by
-                  src/motor/palco-format.ts's formatEventPt, which escapes every
-                  payload value through escapeHtml before interpolation. This is
-                  the same trusted, pre-escaped field the Mural tab renders.
-                */}
-                <span dangerouslySetInnerHTML={{ __html: item.html }} />
-              </li>
-            ))}
-          </ul>
+      <div className="pregao-grid">
+        <section className="pregao-chart-panel">
+          <h2 className="section-title">Curva de equity</h2>
+          <div className="chart-frame">
+            <Line data={data} options={options} />
+          </div>
         </section>
+
+        <div className="pregao-side">
+          <OpenPositionsPanel positions={positions} stakeMc={stakeMc} />
+
+          <SymbolPnlTable rows={bySymbol24h} />
+
+          <section className="trades-panel">
+            <h2 className="section-title">Últimos trades</h2>
+            <ul className="trade-feed">
+              {trades.length === 0 && <li>Sem trades ainda.</li>}
+              {trades.slice(0, MAX_TRADE_ITEMS).map((item) => (
+                <li key={item.id} className={pnlRowClass(item)}>
+                  <span className="ts">{dateShort(item.ts)}</span>
+                  {/*
+                    Safe: item.html is produced server-side by
+                    src/motor/palco-format.ts's formatEventPt, which escapes every
+                    payload value through escapeHtml before interpolation. This is
+                    the same trusted, pre-escaped field the Mural tab renders.
+                  */}
+                  <span dangerouslySetInnerHTML={{ __html: item.html }} />
+                </li>
+              ))}
+            </ul>
+          </section>
+        </div>
       </div>
-    </div>
+    </>
   );
 }

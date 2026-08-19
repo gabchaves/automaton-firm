@@ -294,6 +294,13 @@ button:hover {
   font-weight: normal;
 }
 
+/* Pregão's windowed P&L stat-cards (Task A2, v4 plan): same .hero-card
+ * green default, red override on a loss — the "verde/vermelho pelo sinal"
+ * convention shared with the trades list and Leaderboard's P&L column. */
+.hero-card .v.pnl-neg {
+  color: var(--red);
+}
+
 .hero-card .d {
   font-family: var(--font-mono);
   font-size: 12px;
@@ -1142,6 +1149,32 @@ ul.history-timeline li {
 
 /* ---------- Pregão ---------- */
 
+/* Windowed stat-cards (Task A2, v4 plan) — one .cohort-stats-group per
+ * cohort, side by side on desktop. Cards themselves are plain .hero-card,
+ * reused unchanged; this only adds the grid/label wrapper around them. */
+.pregao-stats-section {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  margin-bottom: 24px;
+}
+
+@media (max-width: 860px) {
+  .pregao-stats-section {
+    grid-template-columns: 1fr;
+  }
+}
+
+.cohort-stats-group > .label {
+  margin-bottom: 8px;
+}
+
+.pregao-stats-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 10px;
+}
+
 /* Right-sized layout: chart takes ~62% width on desktop, positions +
  * trades stack in the remaining column; single column on mobile. */
 .pregao-grid {
@@ -1176,10 +1209,40 @@ ul.history-timeline li {
 }
 
 .positions-panel,
-.trades-panel {
+.trades-panel,
+.symbol-pnl-panel {
   background: var(--black);
   border: var(--border-fade);
   padding: 14px 16px;
+}
+
+/* Per-mesa 24h P&L table (Task A2, v4 plan) — plain semantic <table>, same
+ * mono/hairline tokens as everywhere else; P&L cells reuse .pnl-value's
+ * pnl-pos/pnl-neg coloring. */
+.symbol-pnl-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}
+
+.symbol-pnl-table th {
+  text-align: left;
+  color: var(--blue);
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding-bottom: 6px;
+  border-bottom: var(--border-fade);
+}
+
+.symbol-pnl-table td {
+  padding: 7px 0;
+  border-bottom: var(--border-fade);
+}
+
+.symbol-pnl-table tr:last-child td {
+  border-bottom: none;
 }
 
 .empty-state {
@@ -1420,6 +1483,32 @@ ul.trade-feed .ts {
 .leaderboard-table .p-datatable-tbody > tr:not(.p-highlight):hover {
   background: var(--bg);
   border-left-color: var(--green);
+}
+
+/* "encerrados" divider (v4 plan, Task A3) — separates live rows from
+ * fired/dead within a cohort section; only rendered when that cohort
+ * actually has a non-live row (see leaderboard-order.ts). */
+.leaderboard-table .p-datatable-tbody > tr.leaderboard-divider-row > td {
+  border-top: var(--border-fade);
+  padding-top: 10px;
+  padding-bottom: 4px;
+  background: var(--bg);
+}
+
+.leaderboard-divider-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--lightgrey);
+}
+
+/* Fired/dead rows sink further into the background once sorted below the
+ * divider — same opacity as the Empresa org graph's dimmed nodes
+ * (.org-node-dim); the 💀/📦 status icons stay legible, everything else
+ * quiets down. */
+.leaderboard-table .p-datatable-tbody > tr.leaderboard-row-muted {
+  opacity: 0.55;
 }
 
 /* Podium strip — the cheaper reorder-animation fallback (see

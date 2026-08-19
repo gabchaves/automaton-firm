@@ -20,6 +20,14 @@ export interface PalcoGenome {
   minHoldBars: number; // patience gene: 0 = exits freely
 }
 
+export interface PalcoWindowStats {
+  pnl1hMc: number;
+  pnl24hMc: number;
+  trades1h: number;
+  trades24h: number;
+  winRate24h: number; // wins/trades in the 24h window, 0 when trades24h is 0
+}
+
 export interface PalcoSnapshot {
   generatedAt: number; // caller-provided nowMs (no Date.now in the source module)
   lastEventId: number;
@@ -65,6 +73,11 @@ export interface PalcoSnapshot {
     entryPriceCents: number | null;
   }>; // labels, from achievement events
   feed: Array<{ id: number; ts: number; type: string; html: string; payload: Record<string, unknown> }>; // 40 newest, html pre-formatted+escaped
+  pregao: {
+    evolved: PalcoWindowStats;
+    random: PalcoWindowStats;
+    bySymbol24h: Array<{ symbol: string; pnlMc: number; trades: number }>; // evolved cohort only, BTCUSDT/ETHUSDT/SOLUSDT always present (0/0 when no trades)
+  };
   org: {
     hrPolicy: string; // fixed PT string
     employees: Array<{

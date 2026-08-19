@@ -41,6 +41,11 @@ export interface PalcoSnapshot {
     entryPriceCents: number | null;
   }>; // labels, from achievement events
   feed: Array<{ id: number; ts: number; type: string; html: string; payload: Record<string, unknown> }>; // 40 newest, html pre-formatted+escaped
+  pregao: {
+    evolved: WindowStats;
+    random: WindowStats;
+    bySymbol24h: Array<{ symbol: string; pnlMc: number; trades: number }>; // evolved cohort only, BTCUSDT/ETHUSDT/SOLUSDT always present (0/0 when no trades)
+  };
   org: {
     hrPolicy: string; // fixed PT string, see HR_POLICY_PT
     employees: Array<{
@@ -57,9 +62,14 @@ export interface PalcoSnapshot {
 }
 
 const MS_PER_DAY = 86_400_000;
+const MS_PER_HOUR = 3_600_000;
 const DEFAULT_EQUITY_MC = 100_000_000; // $1,000.00 seed
 const MAX_EQUITY_SERIES_POINTS = 400;
 const FEED_LIMIT = 40;
+// The three tradeable symbols, in fixed display order — bySymbol24h always
+// carries all three (0/0 for ones with no trades in the window) so the
+// front never has to guess which mesas exist.
+const PREGAO_SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT"] as const;
 
 const HR_POLICY_PT =
   "RH baseado em evidência: compara cada trader ao benchmark max(controle aleatório, não fazer nada) na mesma janela de 7 dias. Demite só com evidência clara de underperformance; evidência insuficiente nunca demite nem promove.";
@@ -69,6 +79,14 @@ const ORG_HISTORY_TYPES = [
 ];
 
 type Cohort = "evolved" | "random";
+
+interface WindowStats {
+  pnl1hMc: number;
+  pnl24hMc: number;
+  trades1h: number;
+  trades24h: number;
+  winRate24h: number; // wins/trades in the 24h window, 0 when trades24h is 0
+}
 
 interface GenomeGeneRaw {
   family: string;
@@ -111,6 +129,82 @@ function latestEquityMc(raw: BetterSqlite3.Database, cohort: Cohort): number {
     .prepare("SELECT equity_mc FROM equity_snapshots WHERE cohort = ? ORDER BY ts DESC LIMIT 1")
     .get(cohort) as { equity_mc: number } | undefined;
   return row ? row.equity_mc : DEFAULT_EQUITY_MC;
+}
+
+/** Nearest equity_snapshots row at or before `ts` — the windowed P&L
+ * reference point. Falls back to DEFAULT_EQUITY_MC the same way
+ * latestEquityMc does: a generation younger than the window (no snapshot
+ * old enough yet) reads as "started from the seed", not as a crash. */
+function equityAtOrBefore(raw: BetterSqlite3.Database, cohort: Cohort, ts: number): number {
+  const row = raw
+    .prepare("SELECT equity_mc FROM equity_snapshots WHERE cohort = ? AND ts <= ? ORDER BY ts DESC LIMIT 1")
+    .get(cohort, ts) as { equity_mc: number } | undefined;
+  return row ? row.equity_mc : DEFAULT_EQUITY_MC;
+}
+
+function windowPnlMc(raw: BetterSqlite3.Database, cohort: Cohort, nowMs: number, windowMs: number): number {
+  return latestEquityMc(raw, cohort) - equityAtOrBefore(raw, cohort, nowMs - windowMs);
+}
+
+interface TradeClosedPayload {
+  symbol: string;
+  realizedPnlMc: number;
+}
+
+/** trade_closed events for `cohort` inside `(nowMs - windowMs, nowMs]`,
+ * joined to traders for the cohort filter (events carry trader_id, not
+ * cohort). Parsed payloads only — same shape trade_closed events always
+ * carry (see cohort.ts's buildStepEvents). */
+function tradeClosedPayloadsInWindow(
+  raw: BetterSqlite3.Database,
+  cohort: Cohort,
+  nowMs: number,
+  windowMs: number,
+): TradeClosedPayload[] {
+  const rows = raw
+    .prepare(
+      `SELECT e.payload_json AS payload_json
+       FROM events e JOIN traders t ON t.id = e.trader_id
+       WHERE e.type = 'trade_closed' AND t.cohort = ? AND e.ts > ? AND e.ts <= ?`,
+    )
+    .all(cohort, nowMs - windowMs, nowMs) as { payload_json: string }[];
+  return rows.map((row) => JSON.parse(row.payload_json) as TradeClosedPayload);
+}
+
+function computeWindowStats(raw: BetterSqlite3.Database, cohort: Cohort, nowMs: number): WindowStats {
+  const trades1h = tradeClosedPayloadsInWindow(raw, cohort, nowMs, MS_PER_HOUR).length;
+  const payloads24h = tradeClosedPayloadsInWindow(raw, cohort, nowMs, MS_PER_DAY);
+  const wins24h = payloads24h.filter((payload) => payload.realizedPnlMc > 0).length;
+
+  return {
+    pnl1hMc: windowPnlMc(raw, cohort, nowMs, MS_PER_HOUR),
+    pnl24hMc: windowPnlMc(raw, cohort, nowMs, MS_PER_DAY),
+    trades1h,
+    trades24h: payloads24h.length,
+    winRate24h: payloads24h.length > 0 ? wins24h / payloads24h.length : 0,
+  };
+}
+
+function computeBySymbol24h(raw: BetterSqlite3.Database, nowMs: number): PalcoSnapshot["pregao"]["bySymbol24h"] {
+  const payloads = tradeClosedPayloadsInWindow(raw, "evolved", nowMs, MS_PER_DAY);
+  const bySymbol = new Map<string, { pnlMc: number; trades: number }>();
+  for (const payload of payloads) {
+    const existing = bySymbol.get(payload.symbol) ?? { pnlMc: 0, trades: 0 };
+    bySymbol.set(payload.symbol, { pnlMc: existing.pnlMc + payload.realizedPnlMc, trades: existing.trades + 1 });
+  }
+
+  return PREGAO_SYMBOLS.map((symbol) => {
+    const found = bySymbol.get(symbol);
+    return { symbol, pnlMc: found?.pnlMc ?? 0, trades: found?.trades ?? 0 };
+  });
+}
+
+function computePregao(raw: BetterSqlite3.Database, nowMs: number): PalcoSnapshot["pregao"] {
+  return {
+    evolved: computeWindowStats(raw, "evolved", nowMs),
+    random: computeWindowStats(raw, "random", nowMs),
+    bySymbol24h: computeBySymbol24h(raw, nowMs),
+  };
 }
 
 function liveGeneration(raw: BetterSqlite3.Database, cohort: Cohort): { gen_number: number; peak_equity_mc: number } | undefined {
@@ -374,6 +468,7 @@ export function buildSnapshot(raw: BetterSqlite3.Database, nowMs: number): Palco
     equitySeries: computeEquitySeries(raw),
     leaderboard: computeLeaderboard(raw),
     feed: computeFeed(raw),
+    pregao: computePregao(raw, nowMs),
     org: computeOrg(raw),
   };
 }
