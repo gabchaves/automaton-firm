@@ -1,5 +1,6 @@
 import type { PalcoSnapshot } from "../types";
 import { NumberTicker } from "../components/NumberTicker";
+import { usd } from "../format";
 
 interface SobreTabProps {
   snapshot: PalcoSnapshot | null;
@@ -12,11 +13,18 @@ interface SobreTabProps {
 const PROJECT_LEAD =
   "Uma firma de trading onde ninguém é humano. Traders nascem de um genoma, operam dinheiro de papel em dados reais da Binance, são avaliados por um RH que só demite com evidência — e quando a geração quebra, a próxima herda os melhores genes. É darwinismo com CNPJ imaginário.";
 
-const PROJECT_PARAGRAPHS = [
-  "O Motor roda 24/7 sem tomar café: barras de 5 minutos de BTC, ETH e SOL, decisões 100% determinísticas, tudo gravado num log de eventos que esta página lê ao vivo. Ao lado da firma evoluída corre um controle aleatório com os mesmos limites — cinco traders que decidem na moeda e existem só pra nos impedir de contar vantagem. Spoiler: às vezes é constrangedoramente difícil vencê-los.",
-  "Se um trader vai mal, o RH demite (com relatório). Se vai bem, ganha um título e um post no mural. Se a geração inteira zera, ninguém chora: anota-se o recorde, mistura-se os melhores genomas e nasce a próxima com $100 novinhos. O gráfico de recordes é o eletrocardiograma do experimento — reto até segunda ordem.",
-  "Stack: TypeScript, SQLite, React, SSE — e nenhuma chamada de IA no caminho crítico, porque evolução que precisa de ajuda não é evolução. A pesquisa anterior do projeto mediu e enterrou vários 'edges' ilusórios; este front existe pra tornar o velório assistível. E bonito.",
-];
+const PROJECT_PARAGRAPH_1 =
+  "O Motor roda 24/7 sem tomar café: barras de 5 minutos de BTC, ETH e SOL, decisões 100% determinísticas, tudo gravado num log de eventos que esta página lê ao vivo. Ao lado da firma evoluída corre um controle aleatório com os mesmos limites — cinco traders que decidem na moeda e existem só pra nos impedir de contar vantagem. Spoiler: às vezes é constrangedoramente difícil vencê-los.";
+
+const PROJECT_PARAGRAPH_3 =
+  "Stack: TypeScript, SQLite, React, SSE — e nenhuma chamada de IA no caminho crítico, porque evolução que precisa de ajuda não é evolução. A pesquisa anterior do projeto mediu e enterrou vários 'edges' ilusórios; este front existe pra tornar o velório assistível. E bonito.";
+
+/** The middle paragraph names the per-generation seed amount ("... novinhos"),
+ * so unlike the other two it's built fresh each render from `seedMc`
+ * instead of living as a fixed string. */
+function projectParagraph2(seedMc: number): string {
+  return `Se um trader vai mal, o RH demite (com relatório). Se vai bem, ganha um título e um post no mural. Se a geração inteira zera, ninguém chora: anota-se o recorde, mistura-se os melhores genomas e nasce a próxima com ${usd(seedMc)} novinhos. O gráfico de recordes é o eletrocardiograma do experimento — reto até segunda ordem.`;
+}
 
 const GOLDEN_RULE =
   "Dinheiro real só entra em discussão se a linhagem evoluída vencer o controle aleatório E o não-fazer-nada por ≥ 3 meses de dados virgens ao vivo, fora da banda de ruído.";
@@ -33,6 +41,11 @@ const SKILLS = ["Claude API", "MCP", "Prompt Engineering", "Python", "n8n", "Mak
 export function SobreTab({ snapshot }: SobreTabProps) {
   const virginDays = snapshot?.cards.virginDays;
   const gensEvolved = snapshot?.cards.gensEvolved;
+  // Sane fallback while there's no snapshot yet; every real render derives
+  // from cards.genStartMc instead, so a bankroll scale change never
+  // touches this file again.
+  const seedMc = snapshot?.cards.genStartMc ?? 100_000_000;
+  const paragraphs = [PROJECT_PARAGRAPH_1, projectParagraph2(seedMc), PROJECT_PARAGRAPH_3];
 
   return (
     <div className="sobre-page">
@@ -55,10 +68,10 @@ export function SobreTab({ snapshot }: SobreTabProps) {
               "geração – no ar"
             )}
           </span>
-          <span className="sobre-fact">$100 por geração, sempre</span>
+          <span className="sobre-fact">{`${usd(seedMc)} por geração, sempre`}</span>
         </div>
 
-        {PROJECT_PARAGRAPHS.map((paragraph, index) => (
+        {paragraphs.map((paragraph, index) => (
           <p key={`sobre-p-${index}`} className="sobre-paragraph">
             {paragraph}
           </p>

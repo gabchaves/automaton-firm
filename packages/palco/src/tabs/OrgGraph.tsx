@@ -15,6 +15,7 @@ interface OrgGraphProps {
   leaderboard: LeaderboardEntry[];
   demissoes: number;
   promocoes: number;
+  stakeMc: number; // snapshot.cards.traderStartMc (or its fallback) — see mood.ts
 }
 
 const STATUS_PT: Record<string, string> = { live: "vivo", dead: "morto", fired: "demitido" };
@@ -49,6 +50,7 @@ interface EmployeeNodeData extends Record<string, unknown> {
   employee: Employee;
   tooltip?: string;
   onSelect: (traderId: string) => void;
+  stakeMc: number;
 }
 
 interface RhNodeData extends Record<string, unknown> {
@@ -73,7 +75,7 @@ type OrgFlowNode = EmployeeFlowNode | RhFlowNode | CaptionFlowNode;
  * (this is a read-only diagram), but the node still needs its own
  * keyboard affordance since xyflow doesn't make custom nodes focusable. */
 function EmployeeNodeView({ data }: NodeProps<EmployeeFlowNode>) {
-  const { employee, tooltip, onSelect } = data;
+  const { employee, tooltip, onSelect, stakeMc } = data;
   const dim = employee.status !== "live";
 
   function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
@@ -100,7 +102,7 @@ function EmployeeNodeView({ data }: NodeProps<EmployeeFlowNode>) {
       <div className="org-node-body">
         <div className="org-node-name">
           {employee.name}
-          <span className="mood-emoji">{moodEmoji(employee.status, employee.bookMc)}</span>
+          <span className="mood-emoji">{moodEmoji(employee.status, employee.bookMc, stakeMc)}</span>
         </div>
         <div className="org-node-book">{usd(employee.bookMc)}</div>
         <span className={`status-chip ${STATUS_CLASS[employee.status] ?? ""}`}>
@@ -144,7 +146,12 @@ function CaptionNodeView({ data }: NodeProps<CaptionFlowNode>) {
 const NODE_TYPES: NodeTypes = { employee: EmployeeNodeView, rh: RhNodeView, caption: CaptionNodeView };
 
 /** Lays out one horizontal row of employee nodes, centered on x=0. */
-function rowNodes(list: Employee[], y: number, onSelect: (traderId: string) => void): EmployeeFlowNode[] {
+function rowNodes(
+  list: Employee[],
+  y: number,
+  onSelect: (traderId: string) => void,
+  stakeMc: number,
+): EmployeeFlowNode[] {
   const n = list.length;
   return list.map((employee, index) => ({
     id: employee.traderId,
@@ -155,7 +162,7 @@ function rowNodes(list: Employee[], y: number, onSelect: (traderId: string) => v
       { type: "target", position: Position.Top, x: NODE_WIDTH / 2, y: 0 },
       { type: "source", position: Position.Bottom, x: NODE_WIDTH / 2, y: NODE_HEIGHT },
     ],
-    data: { employee, tooltip: lineageTitle(employee), onSelect },
+    data: { employee, tooltip: lineageTitle(employee), onSelect, stakeMc },
     draggable: false,
     selectable: false,
   }));
@@ -167,6 +174,7 @@ function buildGraph(
   demissoes: number,
   promocoes: number,
   onSelect: (traderId: string) => void,
+  stakeMc: number,
 ): { nodes: OrgFlowNode[]; edges: Edge[] } {
   const firmAll = employees.filter((e) => e.cohort === "evolved"); // RH edges + lineage sources span every status
   const firmLive = firmAll.filter((e) => e.status === "live");
@@ -190,8 +198,8 @@ function buildGraph(
 
   const nodes: OrgFlowNode[] = [
     rhNode,
-    ...rowNodes(firmLive, FIRM_ROW_Y, onSelect),
-    ...rowNodes(controlLive, CONTROL_ROW_Y, onSelect),
+    ...rowNodes(firmLive, FIRM_ROW_Y, onSelect, stakeMc),
+    ...rowNodes(controlLive, CONTROL_ROW_Y, onSelect, stakeMc),
   ];
 
   if (fallen.length > 0) {
@@ -205,7 +213,7 @@ function buildGraph(
       draggable: false,
       selectable: false,
     };
-    nodes.push(captionNode, ...rowNodes(fallen, FALLEN_ROW_Y, onSelect));
+    nodes.push(captionNode, ...rowNodes(fallen, FALLEN_ROW_Y, onSelect, stakeMc));
   }
 
   const edges: Edge[] = [];
@@ -263,12 +271,12 @@ const FIT_VIEW_OPTIONS = { padding: 0.3 };
  * page's own static grain overlay (theme.css's `.page::after`) shows
  * through the panel instead.
  */
-export function OrgGraph({ employees, hrPolicy, leaderboard, demissoes, promocoes }: OrgGraphProps) {
+export function OrgGraph({ employees, hrPolicy, leaderboard, demissoes, promocoes, stakeMc }: OrgGraphProps) {
   const [selectedTraderId, setSelectedTraderId] = useState<string | null>(null);
 
   const { nodes, edges } = useMemo(
-    () => buildGraph(employees, hrPolicy, demissoes, promocoes, setSelectedTraderId),
-    [employees, hrPolicy, demissoes, promocoes],
+    () => buildGraph(employees, hrPolicy, demissoes, promocoes, setSelectedTraderId, stakeMc),
+    [employees, hrPolicy, demissoes, promocoes, stakeMc],
   );
 
   const selectedEmployee = selectedTraderId
@@ -299,6 +307,7 @@ export function OrgGraph({ employees, hrPolicy, leaderboard, demissoes, promocoe
         employee={selectedEmployee}
         leaderboardEntry={selectedLeaderboardEntry}
         onClose={() => setSelectedTraderId(null)}
+        stakeMc={stakeMc}
       />
     </div>
   );

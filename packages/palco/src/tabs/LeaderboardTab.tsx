@@ -44,7 +44,7 @@ function pnlClass(mc: number): string {
  * that actually animates rank reordering — the DataTable itself just
  * re-renders in the new order underneath it.
  */
-function PodiumStrip({ rows }: { rows: RankedRow[] }) {
+function PodiumStrip({ rows, stakeMc }: { rows: RankedRow[]; stakeMc: number }) {
   const top3 = rows.slice(0, 3);
   if (top3.length === 0) return null;
 
@@ -59,7 +59,7 @@ function PodiumStrip({ rows }: { rows: RankedRow[] }) {
             className={`podium-card podium-rank-${row.rank}`}
           >
             <span className="podium-medal">{PODIUM_MEDAL[row.rank]}</span>
-            <span className="podium-mood">{moodEmoji(row.status, row.bookMc)}</span>
+            <span className="podium-mood">{moodEmoji(row.status, row.bookMc, stakeMc)}</span>
             <span className="podium-name">{row.name}</span>
             <span className="podium-book">{usd(row.bookMc)}</span>
           </motion.div>
@@ -81,10 +81,14 @@ export function LeaderboardTab({ snapshot }: LeaderboardTabProps) {
     rank: index + 1,
     id: `${trader.cohort}-${trader.genNumber}-${trader.name}-${index}`,
   }));
+  // Sane fallback (STAKE_MC) while there's no snapshot yet; every real
+  // render derives from cards.traderStartMc instead, so a bankroll scale
+  // change never touches this file again.
+  const stakeMc = snapshot?.cards.traderStartMc ?? STAKE_MC;
 
   return (
     <div>
-      <PodiumStrip rows={rows} />
+      <PodiumStrip rows={rows} stakeMc={stakeMc} />
 
       <DataTable value={rows} dataKey="id" className="leaderboard-table">
         <Column
@@ -107,7 +111,7 @@ export function LeaderboardTab({ snapshot }: LeaderboardTabProps) {
               </span>
               <span className="row-name-text">
                 {row.name}
-                <span className="mood-emoji">{moodEmoji(row.status, row.bookMc)}</span>
+                <span className="mood-emoji">{moodEmoji(row.status, row.bookMc, stakeMc)}</span>
                 {row.achievements.length > 0 && (
                   <span className="achv-badge" title={row.achievements.join(", ")}>
                     ✨{row.achievements.length}
@@ -143,7 +147,7 @@ export function LeaderboardTab({ snapshot }: LeaderboardTabProps) {
         <Column
           header="P&L %"
           body={(row: RankedRow) => {
-            const pct = (row.realizedPnlMc / STAKE_MC) * 100;
+            const pct = (row.realizedPnlMc / stakeMc) * 100;
             return <span className={pnlClass(row.realizedPnlMc)}>{pct.toFixed(1)}%</span>;
           }}
         />

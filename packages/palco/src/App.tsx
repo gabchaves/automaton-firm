@@ -14,12 +14,11 @@ import { MuralTab } from "./tabs/MuralTab";
 import { SobreTab } from "./tabs/SobreTab";
 
 const VIRGIN_DAYS_GATE = 90;
-const DEFAULT_EQUITY_MC = 10_000_000; // $100.00, matches the Motor's seed equity
-
-// v3.2 plan: ShineBorder lights up the "Recorde (pico)" hero card only for
-// a genuine new record ABOVE the $100 seed — never for the seed value
-// itself, which every fresh generation starts at.
-const RECORD_SHINE_THRESHOLD_MC = DEFAULT_EQUITY_MC;
+// Sane fallback while there's no snapshot yet — mirrors palco-data.ts's
+// GEN_START_MC. Every real render derives the seed from
+// `snapshot.cards.genStartMc` instead (see `seedMc` below), so a bankroll
+// scale change never touches this file again.
+const FALLBACK_GEN_START_MC = 100_000_000;
 
 // Tab-content crossfade (Commit 1's micro-animations pass) and the hero
 // strip's stagger-in on first load — both transform/opacity-only tweens,
@@ -65,7 +64,16 @@ export default function App() {
   const cards = snapshot?.cards;
   const [route, setRoute] = useState<Route>("pregao");
 
+  // Every generation's starting bankroll — the front's single source of
+  // truth for the "Não fazer nada" baseline, equity-ticker fallbacks, and
+  // the ShineBorder record threshold below. Falls back only when there's
+  // no snapshot yet.
+  const seedMc = cards?.genStartMc ?? FALLBACK_GEN_START_MC;
   const recordEvolvedMc = cards?.recordEvolvedMc ?? 0;
+  // v3.2 plan: ShineBorder lights up the "Recorde (pico)" hero card only for
+  // a genuine new record ABOVE the generation's seed equity — never for the
+  // seed value itself, which every fresh generation starts at.
+  const recordShineThresholdMc = seedMc;
 
   return (
     <div className="page">
@@ -104,23 +112,23 @@ export default function App() {
           <motion.div className="hero-card" {...heroCardMotionProps(0)}>
             <div className="label">Equity da firma</div>
             <div className="v">
-              <NumberTicker value={cards?.evolvedEquityMc ?? DEFAULT_EQUITY_MC} format={usd} />
+              <NumberTicker value={cards?.evolvedEquityMc ?? seedMc} format={usd} />
             </div>
             <div className="d">Geração {cards?.evolvedGen ?? "–"}</div>
           </motion.div>
           <motion.div className="hero-card" {...heroCardMotionProps(1)}>
             <div className="label">Controle aleatório</div>
             <div className="v">
-              <NumberTicker value={cards?.randomEquityMc ?? DEFAULT_EQUITY_MC} format={usd} />
+              <NumberTicker value={cards?.randomEquityMc ?? seedMc} format={usd} />
             </div>
             <div className="d">Geração {cards?.randomGen ?? "–"}</div>
           </motion.div>
           <motion.div className="hero-card" {...heroCardMotionProps(2)}>
             <div className="label">Não fazer nada</div>
-            <div className="v">$100.00</div>
+            <div className="v">{usd(seedMc)}</div>
             <div className="d">o piso honesto</div>
           </motion.div>
-          <ShineBorder active={recordEvolvedMc > RECORD_SHINE_THRESHOLD_MC}>
+          <ShineBorder active={recordEvolvedMc > recordShineThresholdMc}>
             <motion.div className="hero-card" {...heroCardMotionProps(3)}>
               <div className="label">Recorde (pico)</div>
               <div className="v">

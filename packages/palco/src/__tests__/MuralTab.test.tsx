@@ -47,11 +47,29 @@ describe("MuralTab", () => {
   it("builds a headline post with a humanized body for a big win, from the trade_closed payload", () => {
     render(<MuralTab snapshot={fixtureSnapshot} />);
     expect(screen.getByText("📈 Lucro em destaque")).toBeInTheDocument();
-    // $1.50 (fixture id 50, above the $1 individual-post threshold) —
-    // mulberry32(50) deterministically picks this exact pool line.
+    // $1.50 (fixture id 50) is above this fixture's $0.10 individual-post
+    // threshold (1% of cards.genStartMc = 1_000_000) — mulberry32(50)
+    // deterministically picks this exact pool line.
     expect(
       screen.getByText("$1.50 no bolso. Não foi sorte — foi o genoma. (Foi um pouco de sorte.)"),
     ).toBeInTheDocument();
+  });
+
+  it("derives the small-trade threshold from cards.genStartMc: the fixture's $1.50 win clears its $0.10 threshold as an individual post, while the small ETHUSDT pair (well under it) still collapses into one grouped resumo", () => {
+    render(<MuralTab snapshot={fixtureSnapshot} />);
+
+    // Big win: its own spotlight post, never folded into a resumo group.
+    expect(screen.getByText("📈 Lucro em destaque")).toBeInTheDocument();
+    const bigWinScrap = screen.getByText("📈 Lucro em destaque").closest("li.orkut-scrap");
+    expect(bigWinScrap?.textContent).not.toContain("Resumo da mesa");
+
+    // Small trades (id 42: +$0.02, id 39: -$0.01 — both well under $0.10):
+    // collapsed into exactly one grouped resumo post.
+    expect(screen.getByText("🔁 Resumo da mesa ETHUSDT")).toBeInTheDocument();
+    const resumoScraps = Array.from(document.querySelectorAll("li.orkut-scrap")).filter((li) =>
+      li.textContent?.includes("Resumo da mesa"),
+    );
+    expect(resumoScraps).toHaveLength(1);
   });
 
   it("renders the scrap's author as a link-styled name plus cargo, and an absolute Orkut timestamp", () => {

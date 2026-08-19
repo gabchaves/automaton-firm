@@ -1,5 +1,6 @@
 import type { PalcoSnapshot } from "../types";
 import { relativeTime } from "../format";
+import { STAKE_MC } from "../mood";
 import { OrgGraph } from "./OrgGraph";
 
 interface EmpresaTabProps {
@@ -36,6 +37,10 @@ export function EmpresaTab({ snapshot }: EmpresaTabProps) {
   const employees = org?.employees ?? [];
   const history = org?.history ?? [];
   const nowMs = Date.now();
+  // Sane fallback (STAKE_MC) while there's no snapshot yet; every real
+  // render derives from cards.traderStartMc instead, so a bankroll scale
+  // change never touches this file (or OrgGraph/EmpresaDrawer) again.
+  const stakeMc = snapshot?.cards.traderStartMc ?? STAKE_MC;
 
   const demissoes = history.filter((h) => h.type === "trader_fired").length;
   const promocoes = history.filter((h) => h.type === "trader_promoted").length;
@@ -67,6 +72,7 @@ export function EmpresaTab({ snapshot }: EmpresaTabProps) {
           leaderboard={snapshot?.leaderboard ?? []}
           demissoes={demissoes}
           promocoes={promocoes}
+          stakeMc={stakeMc}
         />
       )}
 

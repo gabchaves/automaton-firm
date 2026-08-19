@@ -55,7 +55,8 @@ export function MuralTab({ snapshot }: MuralTabProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [snapshot?.lastEventId]);
 
-  const posts = useMemo(() => buildMuralPosts(feed), [feed]);
+  const genStartMc = snapshot?.cards.genStartMc;
+  const posts = useMemo(() => buildMuralPosts(feed, genStartMc), [feed, genStartMc]);
 
   if (posts.length === 0) {
     return <p>Sem eventos ainda.</p>;

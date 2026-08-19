@@ -120,7 +120,7 @@ function recordBrokenBody(payload: Record<string, unknown>, rng: Rng): string {
 function genStartedBody(payload: Record<string, unknown>, rng: Rng): string {
   const n = num(payload, "genNumber");
   return pick(rng, [
-    `Nasce a Geração ${n}: $100 na conta e o mundo pela frente. Boa sorte, pequenos.`,
+    `Nasce a Geração ${n}: banca cheia e o mundo pela frente. Boa sorte, pequenos.`,
     `Geração ${n} aberta. Herdaram os melhores genes — e todas as dívidas emocionais dos antecessores.`,
   ]);
 }

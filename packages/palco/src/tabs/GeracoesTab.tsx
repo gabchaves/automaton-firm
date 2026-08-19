@@ -19,8 +19,9 @@ const STAGGER_DELAY_S = 0.04;
 const BAR_GROW_DURATION_S = 0.4;
 const MIN_BAR_WIDTH_PCT = 2; // keep a visible sliver even for a very young generation
 
-const EXPLAINER =
-  "Cada geração começa com $100. A barra mostra quanto tempo viveu; o número, o pico que alcançou. Se a seleção funciona, os picos verdes sobem.";
+function explainerText(seedMc: number): string {
+  return `Cada geração começa com ${usd(seedMc)}. A barra mostra quanto tempo viveu; o número, o pico que alcançou. Se a seleção funciona, os picos verdes sobem.`;
+}
 
 function daysLivedFrom(barsLived: number): string {
   return ((barsLived * BAR_MS) / MS_PER_DAY).toFixed(1);
@@ -68,6 +69,10 @@ function LifeBar({ gen, recordMc, maxBarsLived, index }: LifeBarProps) {
 export function GeracoesTab({ snapshot }: GeracoesTabProps) {
   const generations = snapshot?.generations ?? [];
   const cards = snapshot?.cards;
+  // Sane fallback while there's no snapshot yet; every real render derives
+  // from cards.genStartMc instead, so a bankroll scale change never
+  // touches this file again.
+  const seedMc = cards?.genStartMc ?? 100_000_000;
 
   const genNumbersDesc = Array.from(new Set(generations.map((g) => g.genNumber))).sort((a, b) => b - a);
   const evolvedByGen = new Map(generations.filter((g) => g.cohort === "evolved").map((g) => [g.genNumber, g]));
@@ -122,7 +127,7 @@ export function GeracoesTab({ snapshot }: GeracoesTabProps) {
         )}
       </section>
 
-      <p className="gen-explainer">{EXPLAINER}</p>
+      <p className="gen-explainer">{explainerText(seedMc)}</p>
 
       <h2 className="section-title">Todas as gerações</h2>
       <div className="gen-life-grid">

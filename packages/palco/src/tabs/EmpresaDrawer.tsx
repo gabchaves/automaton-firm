@@ -13,6 +13,7 @@ interface EmpresaDrawerProps {
   employee: Employee | null; // null = closed
   leaderboardEntry: LeaderboardEntry | null;
   onClose: () => void;
+  stakeMc: number; // snapshot.cards.traderStartMc (or its fallback) — see mood.ts
 }
 
 const STATUS_PT: Record<string, string> = { live: "vivo", dead: "morto", fired: "demitido" };
@@ -32,7 +33,7 @@ const STATUS_CLASS: Record<string, string> = { live: "status-live", dead: "statu
  * abstract (see LeaderboardTab.tsx) — here it gets room to read as a
  * sentence + labeled chips instead of a bare params dump.
  */
-export function EmpresaDrawer({ employee, leaderboardEntry, onClose }: EmpresaDrawerProps) {
+export function EmpresaDrawer({ employee, leaderboardEntry, onClose, stakeMc }: EmpresaDrawerProps) {
   useEffect(() => {
     if (!employee) return undefined;
     function handleKeyDown(event: KeyboardEvent) {
@@ -64,7 +65,7 @@ export function EmpresaDrawer({ employee, leaderboardEntry, onClose }: EmpresaDr
             transition={{ duration: 0.25, ease: "easeOut" }}
             onClick={(event) => event.stopPropagation()}
           >
-            <DrawerContent employee={employee} leaderboardEntry={leaderboardEntry} onClose={onClose} />
+            <DrawerContent employee={employee} leaderboardEntry={leaderboardEntry} onClose={onClose} stakeMc={stakeMc} />
           </motion.aside>
         </motion.div>
       )}
@@ -76,9 +77,10 @@ interface DrawerContentProps {
   employee: Employee;
   leaderboardEntry: LeaderboardEntry | null;
   onClose: () => void;
+  stakeMc: number;
 }
 
-function DrawerContent({ employee, leaderboardEntry, onClose }: DrawerContentProps) {
+function DrawerContent({ employee, leaderboardEntry, onClose, stakeMc }: DrawerContentProps) {
   const lineage = lineageLine(employee);
   const genome = leaderboardEntry?.genome;
   const achievements = leaderboardEntry?.achievements ?? [];
@@ -95,7 +97,7 @@ function DrawerContent({ employee, leaderboardEntry, onClose }: DrawerContentPro
       <div className="empresa-drawer-header">
         <div className="empresa-drawer-avatar" style={{ background: avatarBackground(employee.name) }}>
           {initials(employee.name)}
-          <span className="empresa-drawer-mood">{moodEmoji(employee.status, employee.bookMc)}</span>
+          <span className="empresa-drawer-mood">{moodEmoji(employee.status, employee.bookMc, stakeMc)}</span>
         </div>
         <div>
           <h2 className="empresa-drawer-name">{employee.name}</h2>

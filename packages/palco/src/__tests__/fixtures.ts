@@ -5,8 +5,9 @@ import type { PalcoSnapshot } from "../types";
  *
  * The `feed` array is ordered newest-first (id descending), matching the
  * real API. It's deliberately built to exercise MuralTab's post-building
- * rules (v3.2 "less frequent" pass, $1 individual-trade threshold): a
- * big-win BTCUSDT trade well above $1 (its own spotlight post), a
+ * rules (v3.2 "less frequent" pass, individual-trade threshold = 1% of
+ * this fixture's genStartMc = $0.10): a big-win BTCUSDT trade well above
+ * that threshold (its own spotlight post), a
  * trade_opened event (id 41 — dropped entirely from the Mural, stays only
  * in Pregão/the ticker), and TWO small ETHUSDT trade_closed events that are
  * NOT consecutive in feed order (id 42 near the top, id 39 at the bottom,
@@ -38,6 +39,11 @@ export const fixtureSnapshot: PalcoSnapshot = {
     barsProcessed: 5_000,
     lastBarTs: 1_700_000_000_000,
     virginDays: 12.3,
+    // Deliberately a smaller scale than the real Motor's 100_000_000 /
+    // 20_000_000 — proves every derived baseline/threshold/percentage in
+    // the front works at ANY scale, not just the current production one.
+    genStartMc: 1_000_000,
+    traderStartMc: 200_000,
   },
   generations: [
     { cohort: "evolved", genNumber: 1, peakEquityMc: 1_200_000, barsLived: 800, ended: true },
@@ -118,9 +124,9 @@ export const fixtureSnapshot: PalcoSnapshot = {
       ts: 1_700_000_500_000,
       type: "trade_closed",
       html: "fechou BTCUSDT · P&amp;L $1.50",
-      // $1.50 — above the v3.2 plan's $1 individual-post threshold, so this
-      // stays its own spotlight "big win" post instead of folding into a
-      // grouped resumo.
+      // $1.50 — above this fixture's $0.10 individual-post threshold (1% of
+      // genStartMc), so this stays its own spotlight "big win" post instead
+      // of folding into a grouped resumo.
       payload: { symbol: "BTCUSDT", priceCents: 6_000_000, realizedPnlMc: 150_000, feeMc: 100, liquidated: false },
     },
     {

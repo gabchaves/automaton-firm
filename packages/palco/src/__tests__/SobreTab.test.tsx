@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { SobreTab } from "../tabs/SobreTab";
 import { fixtureSnapshot } from "./fixtures";
+import type { PalcoSnapshot } from "../types";
 
 describe("SobreTab", () => {
   it("renders the builder's name and bio, with no phone number anywhere on the page", () => {
@@ -32,10 +33,11 @@ describe("SobreTab", () => {
   it("renders the live virgin-days and gensEvolved facts from the snapshot", () => {
     render(<SobreTab snapshot={fixtureSnapshot} />);
 
-    // Fixture: cards.virginDays = 12.3, cards.gensEvolved = 3.
+    // Fixture: cards.virginDays = 12.3, cards.gensEvolved = 3,
+    // cards.genStartMc = 1_000_000 -> $10.00.
     expect(screen.getByText(/12\.3 dias de dados virgens/)).toBeInTheDocument();
     expect(screen.getByText(/geração 3 no ar/)).toBeInTheDocument();
-    expect(screen.getByText(/\$100 por geração, sempre/)).toBeInTheDocument();
+    expect(screen.getByText(/\$10\.00 por geração, sempre/)).toBeInTheDocument();
   });
 
   it("falls back to placeholder facts when there is no snapshot yet", () => {
@@ -43,5 +45,20 @@ describe("SobreTab", () => {
 
     expect(screen.getByText(/– dias de dados virgens/)).toBeInTheDocument();
     expect(screen.getByText(/geração – no ar/)).toBeInTheDocument();
+    // No snapshot -> the $100_000_000 fallback seed -> $1000.00.
+    expect(screen.getByText(/\$1000\.00 por geração, sempre/)).toBeInTheDocument();
+  });
+
+  it("is scale-invariant: a fixture with a $1000.00 genStartMc renders that exact amount, not a hardcoded $100/$10", () => {
+    const bigBankrollSnapshot: PalcoSnapshot = {
+      ...fixtureSnapshot,
+      cards: { ...fixtureSnapshot.cards, genStartMc: 100_000_000 },
+    };
+
+    render(<SobreTab snapshot={bigBankrollSnapshot} />);
+
+    expect(screen.getByText(/\$1000\.00 por geração, sempre/)).toBeInTheDocument();
+    expect(screen.queryByText(/\$10\.00 por geração, sempre/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/\$100 por geração, sempre/)).not.toBeInTheDocument();
   });
 });

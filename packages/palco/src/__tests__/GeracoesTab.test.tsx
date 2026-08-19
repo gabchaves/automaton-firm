@@ -40,12 +40,14 @@ describe("GeracoesTab", () => {
     expect(label.closest(".life-bar-label")?.textContent).toContain("em curso");
   });
 
-  it("shows the shortened v3 explainer copy", () => {
+  it("shows the shortened v3 explainer copy, with the seed amount derived from cards.genStartMc", () => {
     render(<GeracoesTab snapshot={fixtureSnapshot} />);
 
+    // Fixture: cards.genStartMc = 1_000_000 -> $10.00, not the old
+    // hardcoded $100 — proves the copy scales with the bankroll.
     expect(
       screen.getByText(
-        "Cada geração começa com $100. A barra mostra quanto tempo viveu; o número, o pico que alcançou. Se a seleção funciona, os picos verdes sobem.",
+        "Cada geração começa com $10.00. A barra mostra quanto tempo viveu; o número, o pico que alcançou. Se a seleção funciona, os picos verdes sobem.",
       ),
     ).toBeInTheDocument();
   });

@@ -44,11 +44,14 @@ export interface MuralPost {
   pnlClass?: "pos" | "neg";
 }
 
-// Individual trade_closed posts only survive above this bar — $1.00 on the
-// $100 paper-bankroll scale (v3.2 plan's "less frequent" pass, raised from
-// the v3 plan's $0.05). Everything smaller folds into one grouped "resumo
-// da mesa {symbol}" post per symbol per render instead of flooding the wall.
-const SMALL_TRADE_THRESHOLD_MC = 100_000;
+// Individual trade_closed posts only survive above this bar — 1% of the
+// generation's starting bankroll (v3.2 plan's "less frequent" pass, raised
+// from the v3 plan's flat $0.05). Everything smaller folds into one grouped
+// "resumo da mesa {symbol}" post per symbol per render instead of flooding
+// the wall. Scale-derived: at the Motor's current 100_000_000 genStartMc
+// that's $10.00; the threshold moves automatically with any bankroll change.
+const DEFAULT_GEN_START_MC = 100_000_000; // sane fallback, mirrors palco-data.ts's GEN_START_MC
+const SMALL_TRADE_DIVISOR = 100;
 
 function num(payload: Record<string, unknown>, key: string, fallback = 0): number {
   const value = payload[key];
@@ -64,8 +67,8 @@ function symbolOf(item: FeedItem): string {
   return str(item.payload, "symbol", "?");
 }
 
-function isSmallTrade(item: FeedItem): boolean {
-  return Math.abs(num(item.payload, "realizedPnlMc")) < SMALL_TRADE_THRESHOLD_MC;
+function isSmallTrade(item: FeedItem, thresholdMc: number): boolean {
+  return Math.abs(num(item.payload, "realizedPnlMc")) < thresholdMc;
 }
 
 /** hr_review posts only render when the cycle actually DID something —
@@ -247,14 +250,20 @@ function buildEventPost(item: FeedItem): MuralPost {
  * - `trade_opened` never becomes a post — it stays visible in the Pregão
  *   trades list and the ticker-tape, but the Mural doesn't need an "opened
  *   a position" scrap for every trade.
- * - `trade_closed` posts individually only when |pnl| >= $1; smaller ones
+ * - `trade_closed` posts individually only when |pnl| >= 1% of `genStartMc`
+ *   (see `DEFAULT_GEN_START_MC`/`SMALL_TRADE_DIVISOR` above); smaller ones
  *   fold into one "resumo da mesa {symbol}" post per symbol, aggregated
  *   across the WHOLE rendered feed (not just consecutive entries).
  * - `hr_review` posts only when the cycle actually fired or promoted
  *   someone; a quiet review (0 actions) is skipped entirely.
  * - Every other event type maps 1:1 to its own post, same as before.
+ *
+ * `genStartMc` defaults to `DEFAULT_GEN_START_MC` so callers that haven't
+ * loaded a snapshot yet (or existing call sites) still get a sane
+ * threshold; MuralTab.tsx passes the live `snapshot.cards.genStartMc`.
  */
-export function buildMuralPosts(feed: FeedItem[]): MuralPost[] {
+export function buildMuralPosts(feed: FeedItem[], genStartMc: number = DEFAULT_GEN_START_MC): MuralPost[] {
+  const smallTradeThresholdMc = genStartMc / SMALL_TRADE_DIVISOR;
   const posts: MuralPost[] = [];
   const groupsBySymbol = new Map<string, GroupAccumulator>();
 
@@ -262,7 +271,7 @@ export function buildMuralPosts(feed: FeedItem[]): MuralPost[] {
     if (item.type === "trade_opened") continue;
     if (item.type === "hr_review" && !hasHrActions(item.payload)) continue;
 
-    if (item.type === "trade_closed" && isSmallTrade(item)) {
+    if (item.type === "trade_closed" && isSmallTrade(item, smallTradeThresholdMc)) {
       const symbol = symbolOf(item);
       const existing = groupsBySymbol.get(symbol);
       if (existing) {

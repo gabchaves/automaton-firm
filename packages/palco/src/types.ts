@@ -34,6 +34,8 @@ export interface PalcoSnapshot {
     barsProcessed: number;
     lastBarTs: number | null;
     virginDays: number; // (lastBarTs - min(generations.started_at)) / 86_400_000, 1 decimal
+    genStartMc: number; // bankroll per generation — the front derives baselines/copy from this
+    traderStartMc: number; // stake per trader — the front derives moods/percentages from this
   };
   generations: Array<{
     cohort: string;

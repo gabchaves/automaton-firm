@@ -10,7 +10,7 @@ import { Line } from "react-chartjs-2";
 import type { PalcoSnapshot } from "../types";
 import { dateShort, usd, centsToUsd } from "../format";
 import { initials, avatarBackground } from "../avatar";
-import { moodEmoji } from "../mood";
+import { moodEmoji, STAKE_MC } from "../mood";
 
 ChartJS.register(LinearScale, PointElement, LineElement, Tooltip, Legend);
 
@@ -22,7 +22,6 @@ const MUTED_TEXT = "#71737d";
 const BASELINE_HAIRLINE = "hsla(0, 0%, 100%, 0.35)";
 const GRID_HAIRLINE = "hsla(0, 0%, 100%, 0.08)";
 const MONO_FONT = "'Geist Mono', Consolas, monospace";
-const BASELINE_USD = 100;
 // v3 plan's "right-sized Pregão": trim the trade feed down from a full
 // dump to a genuinely "last N" list now that positions get their own panel.
 const MAX_TRADE_ITEMS = 8;
@@ -55,7 +54,7 @@ function pnlRowClass(item: { type: string; payload: Record<string, unknown> }): 
  * deliberately stops at "what we're in", not "how it's doing" — see the v3
  * plan's Task 1 note.
  */
-function OpenPositionsPanel({ positions }: { positions: LeaderboardEntry[] }) {
+function OpenPositionsPanel({ positions, stakeMc }: { positions: LeaderboardEntry[]; stakeMc: number }) {
   return (
     <section className="positions-panel">
       <h2 className="section-title">Posições abertas</h2>
@@ -71,7 +70,7 @@ function OpenPositionsPanel({ positions }: { positions: LeaderboardEntry[] }) {
               <span className="position-who">
                 <span className="position-name">
                   {trader.name}
-                  <span className="mood-emoji">{moodEmoji(trader.status, trader.bookMc)}</span>
+                  <span className="mood-emoji">{moodEmoji(trader.status, trader.bookMc, stakeMc)}</span>
                 </span>
                 <span className="position-mesa">{`${trader.symbol} · ${trader.leverage}x`}</span>
               </span>
@@ -91,6 +90,12 @@ function OpenPositionsPanel({ positions }: { positions: LeaderboardEntry[] }) {
 }
 
 export function PregaoTab({ snapshot }: PregaoTabProps) {
+  // Sane fallbacks (100_000_000 / STAKE_MC) while there's no snapshot yet;
+  // every real render derives from snapshot.cards instead, so a bankroll
+  // scale change never touches this file again.
+  const seedMc = snapshot?.cards.genStartMc ?? 100_000_000;
+  const stakeMc = snapshot?.cards.traderStartMc ?? STAKE_MC;
+  const baselineUsd = seedMc / 100_000;
   const evolvedPoints = toPoints(snapshot?.equitySeries.evolved ?? []);
   const randomPoints = toPoints(snapshot?.equitySeries.random ?? []);
   const allTs = [...evolvedPoints, ...randomPoints].map((p) => p.x);
@@ -119,10 +124,10 @@ export function PregaoTab({ snapshot }: PregaoTabProps) {
         tension: 0.15,
       },
       {
-        label: "$100 parado",
+        label: `${usd(seedMc)} parado`,
         data: [
-          { x: minTs, y: BASELINE_USD },
-          { x: maxTs, y: BASELINE_USD },
+          { x: minTs, y: baselineUsd },
+          { x: maxTs, y: baselineUsd },
         ],
         borderColor: BASELINE_HAIRLINE,
         borderDash: [2, 3],
@@ -173,7 +178,7 @@ export function PregaoTab({ snapshot }: PregaoTabProps) {
       </section>
 
       <div className="pregao-side">
-        <OpenPositionsPanel positions={positions} />
+        <OpenPositionsPanel positions={positions} stakeMc={stakeMc} />
 
         <section className="trades-panel">
           <h2 className="section-title">Últimos trades</h2>

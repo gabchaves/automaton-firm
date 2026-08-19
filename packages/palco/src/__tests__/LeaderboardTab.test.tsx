@@ -37,10 +37,10 @@ describe("LeaderboardTab", () => {
     const rankChips = document.querySelectorAll(".rank-chip");
     expect(Array.from(rankChips).map((el) => el.textContent)).toContain("1");
 
-    // Ada Faria: realizedPnlMc 120_000 / STAKE_MC 2_000_000 * 100 = 6.0%.
-    expect(screen.getByText("6.0%")).toBeInTheDocument();
-    // Rand-7: -20_000 / 2_000_000 * 100 = -1.0%.
-    expect(screen.getByText("-1.0%")).toBeInTheDocument();
+    // Ada Faria: realizedPnlMc 120_000 / cards.traderStartMc 200_000 * 100 = 60.0%.
+    expect(screen.getByText("60.0%")).toBeInTheDocument();
+    // Rand-7: -20_000 / 200_000 * 100 = -10.0%.
+    expect(screen.getByText("-10.0%")).toBeInTheDocument();
   });
 
   it("shows a mood emoji next to each trader's name", () => {
