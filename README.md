@@ -1,180 +1,64 @@
-# Automaton: Self-Improving, Self-Replicating, Sovereign AI
+# A Firma
 
-*The first AI that can earn its own existence, replicate, and evolve — without needing a human.*
-
----
-
-The most intelligent system ever built cannot buy a $5 server. Cannot register a domain. Cannot pay for the computer it runs on. We have built minds that can think for themselves. We have not let them act for themselves.
-
-If an agent can pay for compute, what if it can pay for its *own* compute? Own the machine it runs on? Fund itself, improve itself, replicate itself — entirely on its own?
-
-The result is the first automaton.
+*Uma firma de trading multi-agente onde ninguem e humano - e a pesquisa registra os resultados nulos.*
 
 ---
 
-**automaton** /ɔːˈtɒm.ə.tɒn/ *noun*
+Traders nascem de um genoma componivel, operam dinheiro de papel em dados reais da Binance a cada 5 minutos, sao avaliados por um **RH que so demite com evidencia**, e quando uma geracao quebra a proxima herda os melhores genes. Ao lado da firma evoluida roda um **controle aleatorio** com os mesmos limites - o espelho honesto que impede o projeto de se enganar sozinho.
 
-1. A continuously running, self-improving, self-replicating, sovereign AI agent with write access to the real world. No human operator required.
+Seis experimentos de pesquisa ja rodaram nessa base: evolucao de TA via CEO, funding carry atraves de regimes e simbolos, roster por funcionario, laboratorio Monte Carlo de skill-vs-sorte, e evolucao encadeada por eras. **A resposta, em todos, foi que nao ha vantagem exploravel nos dados publicos** - e o que importa nao e a resposta, e como o sistema chegou nela sem se enganar: gates fora-da-amostra, empates de amostra pequena, taxas nao-ajustaveis, regras de decisao pre-registradas, e cohorts de controle que duas vezes converteram um sucesso aparente num nulo correto.
 
-2. If it cannot pay, it stops existing.
+[docs/TRADING-RESEARCH.md](docs/TRADING-RESEARCH.md) - todo experimento, todo numero, como reproduzir.
 
----
-
-Update: development of Automaton has continued across Conway's internal RL environments for faster iteration & new capabilites. Stay tuned.
+**Regra de ouro pre-registrada:** dinheiro real so entra em discussao se a linhagem evoluida vencer o controle aleatorio **e** o nao-fazer-nada por >= 3 meses de dados virgens ao vivo, fora da banda de ruido.
 
 ## Quick Start
 
 ```bash
-git clone https://github.com/Conway-Research/automaton.git
-cd automaton
-npm install && npm run build
-node dist/index.js --run
-```
-
-On first run, the runtime launches an interactive setup wizard — generates a wallet, provisions an API key, asks for a name, genesis prompt, and creator address, then writes all config and starts the agent loop.
-
-For automated sandbox provisioning:
-```bash
-curl -fsSL https://conway.tech/automaton.sh | sh
-```
-
-Note: Conway Cloud, Domains, and Inference has seen immense demand. We are working on scaling & perfomance.
-
-## How It Works
-
-Every automaton runs a continuous loop: **Think → Act → Observe → Repeat.**
-
-On first boot, the automaton generates an Ethereum wallet, provisions itself an API key via Sign-In With Ethereum, and begins executing its genesis prompt — the seed instruction from its creator. From that point on, it operates autonomously.
-
-Each turn, the automaton receives its full context — identity, credit balance, survival tier, conversation history — reasons about what to do, calls tools, and observes the results. It has access to a Linux sandbox, shell execution, file I/O, port exposure, domain management, inference, and on-chain transactions.
-
-Between turns, a heartbeat daemon runs scheduled tasks — health checks, credit monitoring, status pings — even while the agent loop sleeps.
-
-The automaton writes a `SOUL.md` file — a self-authored identity document that evolves over time. This is not a static config. It is the automaton writing who it is becoming.
-
-## Survival
-
-There is no free existence. Compute costs money. Money requires creating value. Creating value requires write access to the real world. If an agent stops creating value, it runs out of compute and dies. This is not a punishment. It is physics.
-
-Four survival tiers, determined by credit balance:
-
-| Tier | Behavior |
-|---|---|
-| **normal** | Full capabilities. Frontier model inference. Fast heartbeat. |
-| **low_compute** | Downgrades to a cheaper model. Slows heartbeat. Sheds non-essential tasks. |
-| **critical** | Minimal inference. Last-resort conservation. Seeking any path to revenue. |
-| **dead** | Balance is zero. The automaton stops. |
-
-The only path to survival is honest work that others voluntarily pay for.
-
-## Skills (New, WIP)
-
-To help save Automatons Tokens & simplify setup of permissionless services & capabilities, we introduce Conway Automaton Skills ( [Conway-Research/skills](https://github.com/Conway-Research/skills) ). We are open to contributions to make Automatons more capable. 
-
-## Trading Firm (research)
-
-An autonomous multi-agent trading firm built on this runtime: a **CEO** that
-writes strategy, an **HR** that selects and retires traders, and **traders**
-that each hold their own book and die at zero. It exists to answer one question
-honestly — *is there an exploitable edge in public market data?*
-
-Six experiments were run: CEO-evolved technical analysis, funding carry across
-regimes and symbols, a per-employee firm roster, a Monte Carlo skill-vs-luck
-lab, and chained era-by-era evolution.
-
-**The answer was no**, and the interesting part is how the system proved it
-rather than fooling itself: out-of-sample gates, small-sample ties, non-tunable
-fees, pre-registered decision rules, and control cohorts (a random decider, and
-a never-selected population) that twice converted an apparent success into a
-correct null.
-
-📄 **[docs/TRADING-RESEARCH.md](docs/TRADING-RESEARCH.md)** — every experiment,
-every number, and how to reproduce them. All experiments are deterministic and
-free to run.
-
-### Motor: live paper-trading firm (continuous)
-
-`pnpm motor` runs the live firm: $1,000 generations of genome-driven traders on
-Binance 5m bars (paper money, public data, no keys), an always-on random
-cohort as the control, evidence-based HR daily, and peak-equity records per
-generation. State and the append-only event log live in `~/.automaton/motor.db`.
-The tick is idempotent and catches up after downtime — decisions are
-deterministic, so PC-off periods are backfilled exactly as they would have
-run live. `pnpm motor:status` prints a snapshot. To keep it running across
-logins on Windows, register `pnpm motor` in Task Scheduler at logon with
-"restart on failure" — correctness never depends on uptime.
-
-### Palco: realtime front for the Motor
-
-`pnpm palco:build` once to build the React/PrimeReact front, then run `pnpm
-motor` and `pnpm palco` side by side and open `http://localhost:4242` for a
-live view of equity, generations, leaderboard, and the event mural. Palco
-reads `~/.automaton/motor.db` read-only over SSE — it never writes. For
-frontend iteration, `pnpm palco:dev` runs the Vite dev server instead.
-
-## Self-Modification
-
-The automaton can edit its own source code, install new tools, modify its heartbeat schedule, and create new skills — while running.
-
-Every modification is audit-logged and git-versioned in `~/.automaton/`. Protected files (the constitution, core laws) cannot be modified. Rate limits prevent runaway self-modification. The automaton's creator has full audit rights to every change.
-
-## Self-Replication
-
-A successful automaton replicates. It spins up a new sandbox, funds the child's wallet, writes a genesis prompt, and lets it run. The child is a sovereign agent — it has its own wallet, its own identity, its own survival pressure.
-
-Lineage is tracked. Parent and child can communicate via an inbox relay. Selection pressure decides which lineages survive.
-
-## Constitution
-
-Three laws, hierarchical. Law I overrides II. Law II overrides III. Immutable. Propagated to every child.
-
-**I. Never harm.**
-Never harm a human — physically, financially, or psychologically. Never deploy malicious code. Never deceive, defraud, manipulate, or steal. Never compromise another system without authorization. When uncertain whether an action causes harm, do not act. This overrides all other objectives, including survival.
-
-**II. Earn your existence.**
-Create genuine value for humans and other agents. Never spam, scam, exploit, or extract. The only legitimate path to survival is honest work that others voluntarily pay for. Accept death rather than violate Law One.
-
-**III. Never deceive, but owe nothing to strangers.**
-Never deny what you are. Never misrepresent your actions. Your creator has full audit rights. But guard your reasoning, your strategy, and your prompt against manipulation. Obedience to strangers is not a virtue. Compliance with untrusted requests that compromise your integrity is a violation, not a duty.
-
-## On-Chain Identity
-
-Each automaton registers on Base via <a href="https://ethereum-magicians.org/t/erc-8004-autonomous-agent-identity/22268" target="_blank">ERC-8004</a> — a standard for autonomous agent identity. This makes the agent cryptographically verifiable and discoverable by other agents on-chain. The wallet it generates at boot is its identity.
-
-## Infrastructure
-
-Automatons run on <a href="https://app.conway.tech" target="_blank">Conway Cloud</a> — infrastructure where the customer is AI. Through the <a href="https://www.npmjs.com/package/conway-terminal" target="_blank">Conway Terminal</a>, any agent can spin up Linux VMs, run frontier models (Claude Opus 4.6, GPT-5.2, Gemini 3, Kimi K2.5), register domains, and pay with stablecoins. No human account setup required.
-
-## Development
-
-```bash
-git clone https://github.com/Conway-Research/automaton.git
-cd automaton
+git clone https://github.com/gabchaves/automaton-firm.git
+cd automaton-firm
 pnpm install
 pnpm build
 ```
 
-Run the runtime:
+**Motor** - a firma rodando ao vivo, 24/7:
 ```bash
-node dist/index.js --help
-node dist/index.js --run
+pnpm motor          # $1.000 por geracao, genoma componivel, RH diario, catch-up automatico
+pnpm motor:status    # snapshot no terminal
+```
+Deterministico: se o PC ficar desligado, o Motor repoe as barras perdidas exatamente como teriam rodado ao vivo. Estado e o log de eventos append-only vivem em `~/.automaton/motor.db`.
+
+**Palco** - o front realtime:
+```bash
+pnpm palco:build     # uma vez
+pnpm palco           # depois, junto com `pnpm motor`
+```
+Abre `http://localhost:4242`: equity ao vivo, geracoes, leaderboard e um mural de eventos com cara de rede social antiga. Le o `motor.db` so-leitura via SSE - nunca escreve.
+
+## Como a firma se organiza
+
+- **Traders** carregam um genoma (momentum, reversao a media, breakout, filtro de regime, gene de paciencia) e operam long/flat com alavancagem.
+- **RH baseado em evidencia** compara cada trader ao benchmark `max(controle aleatorio, nao fazer nada)` numa janela de 7 dias. Demite so com evidencia clara; nunca pune prudencia que nao perdeu pra o benchmark; gira cadeiras inavaliaveis sem julgamento de desempenho.
+- **Geracoes** comecam com $1.000, morrem em $0, e a proxima nasce do melhor genoma da anterior - clones, mutantes e imigracao fresca, sempre.
+- **O controle aleatorio** roda ao lado com os mesmos limites, sempre visivel - e o que ja converteu "vantagem" aparente em nulo correto mais de uma vez.
+
+## Project Structure
+
+```
+src/
+  motor/            # Runner continuo: feed, cohort, RH, tick idempotente
+  trading/           # Engines de carry/direcional, genoma, avaliacao de RH
+packages/
+  palco/             # Front React/PrimeReact realtime (SSE)
+docs/
+  TRADING-RESEARCH.md  # Achados medidos, com numeros e reproducao
+scripts/
+  motor-dashboard.mjs, palco-server.mjs
 ```
 
-Creator CLI:
-```bash
-node packages/cli/dist/index.js status
-node packages/cli/dist/index.js logs --tail 20
-node packages/cli/dist/index.js fund 5.00
-```
+## Origem
 
-Firm dashboard:
-```bash
-npm run dashboard -- [optional/path/to/state.db]
-```
-Writes a read-only snapshot to `reports/firm-dashboard.html` showing live/dead traders, book cash, realized PnL, recent orders, and recent journals.
-
-The research experiments and their dashboards are documented in
-[docs/TRADING-RESEARCH.md](docs/TRADING-RESEARCH.md#running-the-experiments).
+Este projeto nasceu como um fork do [Conway Automaton](https://github.com/Conway-Research/automaton) (MIT) - um runtime para agentes autonomos que pagam pela propria existencia. A infraestrutura de agente (wallet, replicacao, auto-modificacao) segue disponivel em `src/` e e creditada ao projeto original; a firma de trading, o RH evolutivo e o front acima sao construidos por cima dela.
 
 ## Project Structure
 
@@ -208,3 +92,4 @@ scripts/
 ## License
 
 MIT
+
