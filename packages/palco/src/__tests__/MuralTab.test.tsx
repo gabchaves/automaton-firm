@@ -207,3 +207,33 @@ describe("MuralTab", () => {
     expect(hiredPost?.textContent).not.toContain("😢");
   });
 });
+
+describe("MuralTab — rotação de cadeira", () => {
+  it("renders an evidence-blind rotation post that never sounds like a verdict", () => {
+    const snapshot = {
+      ...fixtureSnapshot,
+      feed: [
+        {
+          id: 99,
+          ts: 1_700_000_600_000,
+          type: "trader_rotated",
+          html: "🔄 <strong>Olívia Hoffmann</strong> girou a cadeira",
+          payload: {
+            name: "Olívia Hoffmann",
+            reason: "Rotação por falta de evidência: 5 dias sem gerar trades avaliáveis.",
+            returnedMc: 20_000_000,
+          },
+        },
+      ],
+    };
+
+    render(<MuralTab snapshot={snapshot} />);
+
+    expect(screen.getByText("🔄 Rotação de cadeira")).toBeInTheDocument();
+    expect(screen.getByText(/Olívia Hoffmann/)).toBeInTheDocument();
+    // Never framed as a firing: the joke "comunidades" box legitimately
+    // contains the word, so scope the check to the post headline itself.
+    expect(screen.queryByText("📦 Desligamento")).toBeNull();
+    expect(screen.getByText(/sem trades suficientes pra julgar|sem histórico/)).toBeInTheDocument();
+  });
+});

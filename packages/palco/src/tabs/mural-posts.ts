@@ -162,6 +162,16 @@ function buildEventPost(item: FeedItem): MuralPost {
         includeSad: true,
       };
     }
+    case "trader_rotated": {
+      return {
+        ...base,
+        author: { name: "RH", cargo: "RH" },
+        headline: "🔄 Rotação de cadeira",
+        body: pickBody("trader_rotated", p, rng),
+        quoted: str(p, "reason"),
+        includeSad: false,
+      };
+    }
     case "trader_died": {
       const name = str(p, "name", "Trader");
       return {

@@ -17,6 +17,7 @@ export interface PalcoGenome {
   riskFraction: number;
   combinator: string;
   genes: PalcoGeneStruct[];
+  minHoldBars: number; // patience gene: 0 = exits freely
 }
 
 export interface PalcoSnapshot {

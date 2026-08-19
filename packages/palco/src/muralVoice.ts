@@ -143,10 +143,21 @@ function hrReviewBody(payload: Record<string, unknown>, rng: Rng): string {
   ]);
 }
 
+/** Rotation is evidence-blind by design — the voice must never sound like a
+ * performance verdict, or the front would misrepresent the HR rule. */
+function traderRotatedBody(payload: Record<string, unknown>, rng: Rng): string {
+  const name = str(payload, "name", "O trader");
+  return pick(rng, [
+    `O RH girou a cadeira de ${name}: sem trades suficientes pra julgar, sem julgamento pra carregar. Entra genoma novo.`,
+    `${name} saiu sem vermelho no histórico — e sem histórico. A firma precisa de evidência, não de mistério.`,
+  ]);
+}
+
 const BODY_BUILDERS: Record<string, (payload: Record<string, unknown>, rng: Rng) => string> = {
   trade_closed: tradeClosedBody,
   trader_died: traderDiedBody,
   trader_fired: traderFiredBody,
+  trader_rotated: traderRotatedBody,
   trader_hired: traderHiredBody,
   trader_promoted: traderPromotedBody,
   achievement: achievementBody,

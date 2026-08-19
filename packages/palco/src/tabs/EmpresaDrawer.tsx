@@ -161,6 +161,9 @@ function DrawerContent({ employee, leaderboardEntry, onClose, stakeMc }: DrawerC
                 </span>
               ))}
               <span className="chip chip-desk">risco {genome.riskFraction} do book</span>
+              {genome.minHoldBars > 0 && (
+                <span className="chip chip-desk">⏳ segura ≥ {genome.minHoldBars} barras</span>
+              )}
             </div>
           </>
         ) : (

@@ -1286,9 +1286,17 @@ ul.trade-feed .ts {
 
 .p-tag {
   font-family: var(--font-mono);
-  font-size: 9.5px;
-  letter-spacing: 0.08em;
+  /* Was 9.5px in a narrow column: the chips rendered as cramped little
+   * squares. Legibility first — real padding, no wrapping, a min-width so
+   * "firma" and "controle" line up as a column of equal badges. */
+  font-size: 11px;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
+  padding: 4px 10px;
+  min-width: 76px;
+  justify-content: center;
+  white-space: nowrap;
+  border-radius: 2px;
 }
 
 .p-datatable .p-datatable-thead > tr > th {

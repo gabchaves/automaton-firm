@@ -84,6 +84,7 @@ export const fixtureSnapshot: PalcoSnapshot = {
         leverage: 2,
         riskFraction: 0.75,
         combinator: "majority",
+        minHoldBars: 6,
         genes: [
           { family: "momentum", params: { fastBars: 8, slowBars: 34 } },
           { family: "breakout", params: { channelBars: 20 } },
@@ -111,6 +112,7 @@ export const fixtureSnapshot: PalcoSnapshot = {
         leverage: 2,
         riskFraction: 0.6,
         combinator: "any",
+        minHoldBars: 0,
         genes: [{ family: "meanReversion", params: { lookbackBars: 40, entryZ: 1.5 } }],
       },
       achievements: [],

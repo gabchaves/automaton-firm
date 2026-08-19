@@ -14,6 +14,7 @@ const HISTORY_ICON: Record<string, string> = {
   gen_ended: "⚰️",
   trader_hired: "🤝",
   trader_fired: "📦",
+  trader_rotated: "🔄",
   trader_promoted: "🏆",
 };
 
@@ -43,6 +44,7 @@ export function EmpresaTab({ snapshot }: EmpresaTabProps) {
   const stakeMc = snapshot?.cards.traderStartMc ?? STAKE_MC;
 
   const demissoes = history.filter((h) => h.type === "trader_fired").length;
+  const rotacoes = history.filter((h) => h.type === "trader_rotated").length;
   const promocoes = history.filter((h) => h.type === "trader_promoted").length;
 
   return (
@@ -58,6 +60,10 @@ export function EmpresaTab({ snapshot }: EmpresaTabProps) {
           <div>
             <span className="v">{promocoes}</span>
             <span className="label">promoções no ciclo</span>
+          </div>
+          <div>
+            <span className="v">{rotacoes}</span>
+            <span className="label">rotações no ciclo</span>
           </div>
         </div>
       </section>
