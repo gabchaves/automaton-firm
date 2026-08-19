@@ -8,6 +8,7 @@
 
 import type BetterSqlite3 from "better-sqlite3";
 import { formatEventPt } from "./palco-format.js";
+import { GEN_START_MC, TRADER_START_MC } from "./cohort.js";
 
 export interface PalcoSnapshot {
   generatedAt: number; // caller-provided nowMs (no Date.now in the module)
@@ -19,6 +20,8 @@ export interface PalcoSnapshot {
     gensEvolved: number; gensRandom: number;
     barsProcessed: number; lastBarTs: number | null;
     virginDays: number; // (lastBarTs - min(generations.started_at)) / 86_400_000, 1 decimal
+    genStartMc: number;    // bankroll per generation — the front derives baselines/copy from this
+    traderStartMc: number; // stake per trader — the front derives moods/percentages from this
   };
   generations: Array<{
     cohort: string; genNumber: number; peakEquityMc: number;
@@ -54,7 +57,7 @@ export interface PalcoSnapshot {
 }
 
 const MS_PER_DAY = 86_400_000;
-const DEFAULT_EQUITY_MC = 10_000_000; // $100.00 seed
+const DEFAULT_EQUITY_MC = 100_000_000; // $1,000.00 seed
 const MAX_EQUITY_SERIES_POINTS = 400;
 const FEED_LIMIT = 40;
 
@@ -152,6 +155,8 @@ function computeCards(raw: BetterSqlite3.Database): PalcoSnapshot["cards"] {
     barsProcessed,
     lastBarTs,
     virginDays,
+    genStartMc: GEN_START_MC,
+    traderStartMc: TRADER_START_MC,
   };
 }
 

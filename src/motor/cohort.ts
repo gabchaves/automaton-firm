@@ -17,8 +17,8 @@ import { traderName } from "./names.js";
 import type { MotorEventDraft } from "./events.js";
 
 export const ROSTER_SIZE = 5;
-export const TRADER_START_MC = 2_000_000; // $20.00
-export const GEN_START_MC = 10_000_000; // $100.00 — paper money, so we simulate at a legible scale
+export const TRADER_START_MC = 20_000_000; // $200.00
+export const GEN_START_MC = 100_000_000; // $1,000.00 — paper money at a legible scale (median trade was $0.01 at $100)
 export const FEE_BPS = 10;
 
 export interface TraderRuntime {

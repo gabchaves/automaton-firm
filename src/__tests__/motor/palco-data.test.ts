@@ -83,12 +83,12 @@ describe("buildSnapshot: cards", () => {
     expect(snap.cards.virginDays).toBe(10.3);
   });
 
-  test("defaults: no equity snapshots -> 10_000_000; no bars -> lastBarTs null, virginDays 0", () => {
+  test("defaults: no equity snapshots -> 100_000_000; no bars -> lastBarTs null, virginDays 0", () => {
     const d = fresh();
     d.insertGeneration(generationRow({ id: "g1" }));
     const snap = buildSnapshot(d.raw, 1234);
-    expect(snap.cards.evolvedEquityMc).toBe(10_000_000);
-    expect(snap.cards.randomEquityMc).toBe(10_000_000);
+    expect(snap.cards.evolvedEquityMc).toBe(100_000_000);
+    expect(snap.cards.randomEquityMc).toBe(100_000_000);
     expect(snap.cards.lastBarTs).toBeNull();
     expect(snap.cards.virginDays).toBe(0);
     expect(snap.cards.barsProcessed).toBe(0);

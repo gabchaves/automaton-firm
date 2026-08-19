@@ -84,7 +84,7 @@ describe("evaluateAchievements", () => {
     const richer = {
       ...evolved,
       traders: evolved.traders.map((t, i) =>
-        i === 0 ? { ...t, step: { ...t.step, cashMc: 2_300_000 } } : t),
+        i === 0 ? { ...t, step: { ...t.step, cashMc: 23_000_000 } } : t),
     };
     const trader = richer.traders[0];
 
