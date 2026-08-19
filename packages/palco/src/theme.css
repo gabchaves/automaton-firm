@@ -1284,19 +1284,34 @@ ul.trade-feed .ts {
 
 /* ---------- PrimeReact widget dark harmonization ---------- */
 
-.p-tag {
+/* Cohort badges in the Leaderboard. PrimeReact ships loud filled severity
+ * pills (bright green / teal) that fight this page's identity — override to
+ * ghost chips: transparent ground, hairline border, colour carried by the
+ * text alone. Quiet enough to scan a column of them. */
+.p-tag,
+.p-tag.p-tag-success,
+.p-tag.p-tag-info,
+.p-tag.p-tag-secondary,
+.p-tag.p-tag-warning,
+.p-tag.p-tag-danger {
   font-family: var(--font-mono);
-  /* Was 9.5px in a narrow column: the chips rendered as cramped little
-   * squares. Legibility first — real padding, no wrapping, a min-width so
-   * "firma" and "controle" line up as a column of equal badges. */
-  font-size: 11px;
-  letter-spacing: 0.06em;
+  font-size: 10px;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  padding: 4px 10px;
-  min-width: 76px;
-  justify-content: center;
-  white-space: nowrap;
+  padding: 2px 8px;
   border-radius: 2px;
+  background: transparent;
+  border: 1px solid currentColor;
+  white-space: nowrap;
+}
+
+.p-tag.p-tag-success {
+  color: var(--green);
+}
+
+.p-tag.p-tag-info,
+.p-tag.p-tag-secondary {
+  color: var(--lightgrey);
 }
 
 .p-datatable .p-datatable-thead > tr > th {
