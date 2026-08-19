@@ -1,6 +1,54 @@
 import { describe, expect, it } from "vitest";
 import { mulberry32 } from "../rng";
-import { pickBody, signedUsd } from "../muralVoice";
+import { pickBody, signedUsd, poolSizeFor } from "../muralVoice";
+
+// v4 plan Task B2: every pool must carry >= 4 variants so a run of posts
+// doesn't repeat within a week. `poolSizeFor` (muralVoice.ts) samples every
+// pick index directly instead of this file hardcoding each pool's literal
+// line count, which would drift the moment a line's wording changes.
+const MODELED_TYPES = [
+  "trade_closed",
+  "trader_died",
+  "trader_fired",
+  "trader_rotated",
+  "trader_hired",
+  "trader_promoted",
+  "achievement",
+  "record_broken",
+  "gen_started",
+  "gen_ended",
+  "hr_review",
+];
+
+/** `poolSizeFor`'s representative payload for "trade_closed" only exercises
+ * its win branch (positive realizedPnlMc, not liquidated) — trade_closed
+ * actually has THREE independent pools (liquidated / win / loss) behind one
+ * builder, so the liquidated and loss branches get their own direct checks
+ * here using the same 8-probe sampling technique. */
+function samplePoolSize(type: string, payload: Record<string, unknown>, probes = 8): number {
+  const seen = new Set<string>();
+  for (let i = 0; i < probes; i++) {
+    const fraction = (i + 0.5) / probes;
+    seen.add(pickBody(type, payload, () => fraction));
+  }
+  return seen.size;
+}
+
+describe("pool sizes (v4 Task B2)", () => {
+  it.each(MODELED_TYPES)("has at least 4 variants for %s", (type) => {
+    expect(poolSizeFor(type)).toBeGreaterThanOrEqual(4);
+  });
+
+  it("has at least 4 variants for trade_closed's liquidated branch", () => {
+    const size = samplePoolSize("trade_closed", { symbol: "BTCUSDT", realizedPnlMc: -50_000, liquidated: true });
+    expect(size).toBeGreaterThanOrEqual(4);
+  });
+
+  it("has at least 4 variants for trade_closed's loss branch", () => {
+    const size = samplePoolSize("trade_closed", { symbol: "BTCUSDT", realizedPnlMc: -50_000 });
+    expect(size).toBeGreaterThanOrEqual(4);
+  });
+});
 
 describe("signedUsd", () => {
   it("keeps the $ before a positive amount", () => {
@@ -18,7 +66,7 @@ describe("pickBody", () => {
     const first = pickBody("trade_closed", payload, mulberry32(999));
     const second = pickBody("trade_closed", payload, mulberry32(999));
     expect(first).toBe(second);
-    expect(first).toBe("Realizei $1.50 em BTCUSDT. Quem não realiza, sonha.");
+    expect(first).toBe("Bati o mercado em BTCUSDT: $1.50. CNPJ imaginário, resultado real.");
   });
 
   it("picks the liquidated pool over the loss pool when payload.liquidated is true", () => {
@@ -27,12 +75,12 @@ describe("pickBody", () => {
       { symbol: "SOLUSDT", realizedPnlMc: -300_000, liquidated: true },
       mulberry32(1),
     );
-    expect(body).toBe("A alavancagem dá, a alavancagem tira. SOLUSDT tirou.");
+    expect(body).toBe("Seleção natural, capítulo alavancagem: SOLUSDT venceu essa rodada.");
   });
 
   it("uses a signed dollar amount for a loss", () => {
     const body = pickBody("trade_closed", { symbol: "ADAUSDT", realizedPnlMc: -120_000 }, mulberry32(1));
-    expect(body).toBe("-$1.20. Prefiro chamar de 'custo de aprendizado não supervisionado'.");
+    expect(body).toBe("-$1.20 em ADAUSDT. Um dia de cada vez na luta contra a extinção.");
   });
 
   it("uses a plain (unsigned) dollar amount for a win", () => {
@@ -42,7 +90,7 @@ describe("pickBody", () => {
 
   it("fills name + formatted age for trader_died", () => {
     const body = pickBody("trader_died", { name: "Zeca Prado", ageMs: 7_200_000 }, mulberry32(1));
-    expect(body).toBe("Zeca Prado lutou até o último centavo. O mercado foi mais forte. 🕯️");
+    expect(body).toBe("É com pesar que a firma comunica: Zeca Prado zerou. O genoma segue vivo nas próximas gerações.");
   });
 
   it("fills name + returned for trader_fired", () => {
@@ -54,17 +102,17 @@ describe("pickBody", () => {
 
   it("fills name for trader_hired", () => {
     const body = pickBody("trader_hired", { name: "Beto Nunes" }, mulberry32(4));
-    expect(body).toBe("Beto Nunes entrou pra firma. Mesa nova, book zerado, esperança no máximo.");
+    expect(body).toBe("Beto Nunes assinou o contrato genético. Bem-vindo(a) à fila da avaliação semanal.");
   });
 
   it("fills name for trader_promoted", () => {
     const body = pickBody("trader_promoted", { name: "Ada Faria" }, mulberry32(3));
-    expect(body).toBe("Promoção pra Ada Faria! Bateu o benchmark — que neste mercado é quase poesia.");
+    expect(body).toBe("Ada Faria subiu de posto. A evidência favoreceu, o RH aplaudiu.");
   });
 
   it("fills name + label for achievement", () => {
     const body = pickBody("achievement", { name: "Ada Faria", label: "Primeiro trade" }, mulberry32(47));
-    expect(body).toBe("Conquista nova na parede de Ada Faria: 'Primeiro trade'.");
+    expect(body).toBe("Ada Faria cravou 'Primeiro trade'. Mais uma linha bonita na ficha genética.");
   });
 
   it("fills the formatted peak for record_broken", () => {
@@ -74,20 +122,20 @@ describe("pickBody", () => {
 
   it("fills genNumber for gen_started", () => {
     const body = pickBody("gen_started", { genNumber: 3 }, mulberry32(44));
-    expect(body).toBe("Geração 3 aberta. Herdaram os melhores genes — e todas as dívidas emocionais dos antecessores.");
+    expect(body).toBe("Geração 3 no ar. Genoma fresco, book cheio, relógio da avaliação já correndo.");
   });
 
   it("fills genNumber/peak for gen_ended", () => {
     const body = pickBody("gen_ended", { genNumber: 2, peakEquityMc: 1_480_000, daysLived: 3 }, mulberry32(5));
-    expect(body).toBe("A Geração 2 fecha as portas com pico de $14.80. O que era gene bom virou herança.");
+    expect(body).toBe("Geração 2 encerrada após 3 dias: pico de $14.80. Extinção com dignidade.");
   });
 
-  it("only ever returns its single line for hr_review, regardless of seed", () => {
+  it("fills fired/promoted counts for hr_review, deterministically for a given seed", () => {
     const payload = { fired: 1, promoted: 2 };
-    expect(pickBody("hr_review", payload, mulberry32(7))).toBe(
-      "Ciclo de avaliação: 1 desligamento(s), 2 promoção(ões). O RH dormirá tranquilo — decidiu com dados.",
-    );
-    expect(pickBody("hr_review", payload, mulberry32(999_999))).toBe(
+    const first = pickBody("hr_review", payload, mulberry32(7));
+    const second = pickBody("hr_review", payload, mulberry32(7));
+    expect(first).toBe(second);
+    expect(first).toBe(
       "Ciclo de avaliação: 1 desligamento(s), 2 promoção(ões). O RH dormirá tranquilo — decidiu com dados.",
     );
   });

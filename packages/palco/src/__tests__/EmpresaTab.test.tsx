@@ -23,7 +23,11 @@ describe("EmpresaTab", () => {
   it("renders the RH card with the exact policy string and ciclo counters from org.history", () => {
     render(<EmpresaTab snapshot={fixtureSnapshot} />);
 
-    expect(screen.getByText("Recursos Humanos")).toBeInTheDocument();
+    // v4 Task B1 also gives the org graph's RH node its own "Recursos
+    // Humanos" caption node (OrgGraph.tsx), so the text now legitimately
+    // appears twice on the page — scope this assertion to the RH card's
+    // own section title, not the graph's caption.
+    expect(screen.getByText("Recursos Humanos", { selector: ".rh-card .section-title" })).toBeInTheDocument();
     expect(screen.getByText(/RH baseado em evidência/)).toBeInTheDocument();
     // 1 trader_fired + 1 trader_promoted in the fixture's org.history.
     expect(screen.getAllByText("1", { selector: ".rh-counters .v" })).toHaveLength(2);

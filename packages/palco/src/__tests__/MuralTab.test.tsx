@@ -47,15 +47,13 @@ describe("MuralTab", () => {
   it("builds a headline post with a humanized body for a big win, from the trade_closed payload", () => {
     render(<MuralTab snapshot={fixtureSnapshot} />);
     expect(screen.getByText("📈 Lucro em destaque")).toBeInTheDocument();
-    // $1.50 (fixture id 50) is above this fixture's $0.10 individual-post
-    // threshold (1% of cards.genStartMc = 1_000_000) — mulberry32(50)
+    // $1.50 (fixture id 50) is above this fixture's $0.20 individual-post
+    // threshold (2% of cards.genStartMc = 1_000_000) — mulberry32(50)
     // deterministically picks this exact pool line.
-    expect(
-      screen.getByText("$1.50 no bolso. Não foi sorte — foi o genoma. (Foi um pouco de sorte.)"),
-    ).toBeInTheDocument();
+    expect(screen.getByText("Realizei $1.50 em BTCUSDT. Quem não realiza, sonha.")).toBeInTheDocument();
   });
 
-  it("derives the small-trade threshold from cards.genStartMc: the fixture's $1.50 win clears its $0.10 threshold as an individual post, while the small ETHUSDT pair (well under it) still collapses into one grouped resumo", () => {
+  it("derives the small-trade threshold from cards.genStartMc: the fixture's $1.50 win clears its $0.20 threshold as an individual post, while the small ETHUSDT pair (well under it) still collapses into one grouped resumo", () => {
     render(<MuralTab snapshot={fixtureSnapshot} />);
 
     // Big win: its own spotlight post, never folded into a resumo group.
@@ -63,7 +61,7 @@ describe("MuralTab", () => {
     const bigWinScrap = screen.getByText("📈 Lucro em destaque").closest("li.orkut-scrap");
     expect(bigWinScrap?.textContent).not.toContain("Resumo da mesa");
 
-    // Small trades (id 42: +$0.02, id 39: -$0.01 — both well under $0.10):
+    // Small trades (id 42: +$0.02, id 39: -$0.01 — both well under $0.20):
     // collapsed into exactly one grouped resumo post.
     expect(screen.getByText("🔁 Resumo da mesa ETHUSDT")).toBeInTheDocument();
     const resumoScraps = Array.from(document.querySelectorAll("li.orkut-scrap")).filter((li) =>
@@ -88,9 +86,7 @@ describe("MuralTab", () => {
     expect(screen.getByText("📦 Desligamento")).toBeInTheDocument();
     // mulberry32(49) deterministically picks this exact pool line.
     expect(
-      screen.getByText(
-        "Comunicado do RH: encerramos o ciclo de Caue Reis. Devolveu $0.80 ao caixa. A decisão foi baseada em evidência — como sempre.",
-      ),
+      screen.getByText("O RH agradece os serviços de Caue Reis. Os dados não mentem; infelizmente, também não perdoam."),
     ).toBeInTheDocument();
     expect(screen.getByText("underperformance sustentada")).toBeInTheDocument();
     // RH is the post's author, not the fired employee.
@@ -180,7 +176,7 @@ describe("MuralTab", () => {
 
     expect(firstRun).toBeTruthy();
     expect(firstRun).toBe(secondRun);
-    expect(firstRun).toContain("$1.50 no bolso. Não foi sorte — foi o genoma. (Foi um pouco de sorte.)");
+    expect(firstRun).toContain("Realizei $1.50 em BTCUSDT. Quem não realiza, sonha.");
   });
 
   it("renders the reactions footer as decorative Orkut-style phrases, deterministically across two separate renders", () => {
@@ -205,6 +201,54 @@ describe("MuralTab", () => {
 
     expect(firedPost?.textContent).toContain("😢");
     expect(hiredPost?.textContent).not.toContain("😢");
+  });
+
+  it("renders a deterministic karma number next to the author name, identical across two separate renders (v4 Task B2)", () => {
+    const { unmount } = render(<MuralTab snapshot={fixtureSnapshot} />);
+    const firstKarma = screen.getByText("📈 Lucro em destaque").closest("li.orkut-scrap")?.querySelector(".orkut-karma")
+      ?.textContent;
+    unmount();
+    cleanup();
+
+    render(<MuralTab snapshot={fixtureSnapshot} />);
+    const secondKarma = screen
+      .getByText("📈 Lucro em destaque")
+      .closest("li.orkut-scrap")
+      ?.querySelector(".orkut-karma")?.textContent;
+
+    expect(firstKarma).toBeTruthy();
+    expect(firstKarma).toMatch(/^★ \d+ karma$/);
+    expect(firstKarma).toBe(secondKarma);
+  });
+
+  it("gives every post its own karma badge in the title bar", () => {
+    render(<MuralTab snapshot={fixtureSnapshot} />);
+    const karmaBadges = document.querySelectorAll(".orkut-karma");
+    expect(karmaBadges.length).toBe(10); // one per post, same count as "scraps (10)"
+  });
+
+  it("expands the visitor counter into a 'visitas recentes' line with 2-3 names from the known trader roster, clearly labeled decorative", () => {
+    render(<MuralTab snapshot={fixtureSnapshot} />);
+    const line = screen.getByText(/visitas recentes:/);
+    expect(line).toBeInTheDocument();
+    // fixtureSnapshot's org.employees: Ada Faria, Beto Nunes, Caue Reis, Rand-7.
+    const knownNames = ["Ada Faria", "Beto Nunes", "Caue Reis", "Rand-7"];
+    const mentioned = knownNames.filter((name) => line.textContent?.includes(name));
+    expect(mentioned.length).toBeGreaterThanOrEqual(2);
+    expect(mentioned.length).toBeLessThanOrEqual(3);
+    expect(screen.getByText(/decorativo/)).toBeInTheDocument();
+  });
+
+  it("renders the same 'visitas recentes' names deterministically across two separate renders", () => {
+    const { unmount } = render(<MuralTab snapshot={fixtureSnapshot} />);
+    const first = screen.getByText(/visitas recentes:/).textContent;
+    unmount();
+    cleanup();
+
+    render(<MuralTab snapshot={fixtureSnapshot} />);
+    const second = screen.getByText(/visitas recentes:/).textContent;
+
+    expect(first).toBe(second);
   });
 });
 
@@ -234,6 +278,12 @@ describe("MuralTab — rotação de cadeira", () => {
     // Never framed as a firing: the joke "comunidades" box legitimately
     // contains the word, so scope the check to the post headline itself.
     expect(screen.queryByText("📦 Desligamento")).toBeNull();
-    expect(screen.getByText(/sem trades suficientes pra julgar|sem histórico/)).toBeInTheDocument();
+    // v4's expanded (4-variant) pool always names the ABSENCE of evidence
+    // explicitly (see muralVoice.ts's traderRotatedBody), so this holds
+    // regardless of which of the 4 lines mulberry32(99) actually picks —
+    // and none of them reach for verdict/performance language.
+    const rotationPost = screen.getByText("🔄 Rotação de cadeira").closest("li.orkut-scrap");
+    expect(rotationPost?.textContent).toMatch(/evidência/i);
+    expect(rotationPost?.textContent).not.toMatch(/desempenho|performance|mau trader/i);
   });
 });

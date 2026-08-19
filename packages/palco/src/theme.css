@@ -444,6 +444,23 @@ footer.honesty p {
   color: #5a6b85;
 }
 
+/* "visitas recentes" — v4 Task B2's Orkut escalation of the visitor
+ * counter above. Names are real (pulled from the current generation's
+ * roster, see recentVisitorNames in MuralTab.tsx); only the "visiting"
+ * framing is decorative, called out inline via `.orkut-decorative-tag`
+ * rather than left implicit. */
+.orkut-recent-visitors {
+  margin: 0 0 10px;
+  text-align: right;
+  font-size: 11px;
+  color: #5a6b85;
+}
+
+.orkut-decorative-tag {
+  color: #8a97ab;
+  font-style: italic;
+}
+
 /* Fun-pass addendum's decorative "comunidades" box — 3 fixed joke
  * communities, never real data (see JOKE_COMMUNITIES in MuralTab.tsx). */
 .orkut-communities {
@@ -541,6 +558,16 @@ li.orkut-scrap:last-child {
   margin-left: 6px;
   font-size: 10.5px;
   color: #7c8aa3;
+}
+
+/* Deterministic decorative "karma" score (v4 Task B2's Orkut escalation),
+ * seeded the same way as the reactions below (seededKarma, rng.ts) — small
+ * and muted, sitting right after the author name in the title bar. */
+.orkut-karma {
+  margin-left: 6px;
+  font-size: 10.5px;
+  font-weight: bold;
+  color: #b8860b;
 }
 
 .orkut-scrap-box {
@@ -727,6 +754,12 @@ li.orkut-scrap:last-child {
  * cycle counters + a live "próxima avaliação" countdown (see
  * OrgGraph.tsx's RhNodeView) — so it's column-flow now instead of a single
  * centered label. */
+/* v4 Task B1: RH gets its own unmistakable treatment — a --blue top accent
+ * bar (the identity's chip-accent color, reused rather than a new token) on
+ * top of the existing cream/black swap that already set it apart from the
+ * black employee nodes, plus a distinct icon (`.org-rh-icon`) and its own
+ * "Recursos Humanos" caption node above it (see OrgGraph.tsx's buildGraph).
+ * Spatial position was never enough on its own, per the plan. */
 .org-rh-node {
   display: flex;
   flex-direction: column;
@@ -738,7 +771,13 @@ li.orkut-scrap:last-child {
   background: var(--cream);
   color: var(--black);
   border: var(--border-fade);
+  border-top: 3px solid var(--blue);
   padding: 8px 10px;
+}
+
+.org-rh-icon {
+  font-size: 20px;
+  line-height: 1;
 }
 
 .org-rh-title {
@@ -787,8 +826,11 @@ li.orkut-scrap:last-child {
   opacity: 0.55;
 }
 
-/* "galeria dos caídos" — small mono caption above the fallen (dead/fired)
- * row, v3.1 plan. Plain text node, no card chrome. */
+/* Tier header captions — v3.1 introduced this for the fallen row alone
+ * ("galeria dos caídos"); v4 Task B1 reuses the same plain-text-node style
+ * for EVERY tier ("Recursos Humanos" / "A Firma" / "Controle" /
+ * "Encerrados"), since spatial grouping alone doesn't count as a clear
+ * header per the plan. No card chrome. */
 .org-caption-node {
   display: flex;
   align-items: center;
@@ -801,6 +843,13 @@ li.orkut-scrap:last-child {
   text-transform: uppercase;
   color: var(--lightgrey);
   text-align: center;
+}
+
+/* Encerrados' header is muted to match its row's own 55%-opacity
+ * treatment (`.org-node-dim`) — still a real, readable header, just quieter
+ * than "A Firma"/"Controle" the same way the row under it is quieter. */
+.org-caption-node-dim {
+  opacity: 0.7;
 }
 
 .org-node-avatar {
@@ -1602,23 +1651,47 @@ ul.trade-feed .ts {
   font-size: clamp(18px, 2.2vw, 24px);
   line-height: 1.4;
   max-width: 68ch;
-  margin: 10px 0 24px;
+  margin: 10px 0 4px;
   color: var(--ink);
 }
 
-.sobre-facts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px 20px;
-  margin: 0 0 28px;
+/* v4 Task B3: the old inline `.sobre-fact` text chips became real
+ * `.hero-card` stat-cards — same visual as Pregão's stat-card row
+ * (`.pregao-stats-strip`), reused as-is for cross-page consistency instead
+ * of a bespoke Sobre-only style. */
+.sobre-stats-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px 14px;
+  margin: 18px 0 28px;
+  max-width: 68ch;
 }
 
-.sobre-fact {
+/* One mini-titled chunk of "O projeto" (v4 Task B3's wall-of-text fix) —
+ * spacing only; the title itself reuses `.label` (see SobreTab.tsx's
+ * SobreSubsection), the same chip-styled mini-heading EmpresaDrawer's
+ * profile sections already use ("Papel na firma", "Genoma", etc.). */
+.sobre-subsection {
+  margin: 0 0 22px;
+}
+
+.sobre-subsection-title {
+  margin: 0 0 10px;
+}
+
+/* "Motor → RH → Recorde" flow strip (v4 Task B3) — plain arrow glyphs
+ * between chips reusing `.genome-chips .chip`/`.chip-desk` as-is (the
+ * container itself IS `.genome-chips`, see SobreTab.tsx), so only the
+ * arrow glyph needs its own rule. */
+.sobre-flow-strip {
+  align-items: center;
+  margin: 4px 0 14px;
+}
+
+.sobre-flow-arrow {
   font-family: var(--font-mono);
-  font-size: 12px;
-  color: var(--green);
-  border: var(--border-fade);
-  padding: 6px 12px;
+  color: var(--lightgrey);
+  font-size: 13px;
 }
 
 .sobre-paragraph {
@@ -1631,6 +1704,29 @@ ul.trade-feed .ts {
 
 .sobre-footer-chip {
   margin-top: 12px;
+}
+
+/* Author header (v4 Task B3): big initials avatar (avatar.ts, same visual
+ * language as trader avatars — see `.org-node-avatar`/`.empresa-drawer-
+ * avatar`) next to the name/role, instead of a bare text block. */
+.sobre-author-header {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.sobre-author-avatar {
+  flex: 0 0 auto;
+  width: 88px;
+  height: 88px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 30px;
+  font-weight: bold;
+  color: var(--ink);
+  border: var(--border-fade);
 }
 
 /* Golden rule block — the honesty banner's new home inside the Sobre tab

@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import type { PalcoSnapshot } from "../types";
 import { absoluteTimestamp } from "../format";
 import { initials, avatarBackground } from "../avatar";
-import { seededReactions } from "../rng";
+import { seededReactions, seededKarma, seededPick } from "../rng";
 import { buildMuralPosts } from "./mural-posts";
 
 interface MuralTabProps {
@@ -23,6 +23,13 @@ const JOKE_COMMUNITIES = [
 
 const VISITOR_NUMBER_DIGITS = 6;
 const SLIDE_DOWN_DURATION_S = 0.35;
+// v4 Task B2 Orkut escalation: how many names the decorative "visitas
+// recentes" line shows, and a seed offset so its shuffle never draws the
+// same mulberry32 sequence as any per-event seed (event ids and
+// lastEventId stay far below this in practice — it only needs to differ,
+// not be cryptographically distinct).
+const RECENT_VISITORS_COUNT = 3;
+const RECENT_VISITORS_SEED_OFFSET = 7_919;
 
 /** "N pessoas aplaudiram" / "1 pessoa aplaudiu" — same PT singular/plural
  * handling convention as mural-posts.ts's grouped-trade count. */
@@ -34,6 +41,18 @@ function clapPhrase(n: number): string {
  * 6 digits — real underlying number, decorative framing only. */
 function visitorNumber(lastEventId: number): string {
   return String(Math.max(0, lastEventId)).padStart(VISITOR_NUMBER_DIGITS, "0");
+}
+
+/** 2-3 names for the "visitas recentes" decorative line (v4 Task B2's
+ * Orkut escalation), deterministically picked from the CURRENT
+ * generation's real trader roster (`org.employees`) — same "never fake
+ * DATA" rule as `JOKE_COMMUNITIES` below: the NAMES are real, only the
+ * framing ("visitando o mural") is decorative. Seeded off `lastEventId` so
+ * the list is stable across re-renders of the same snapshot and reshuffles
+ * only as the feed actually moves. */
+function recentVisitorNames(employees: Array<{ name: string }>, lastEventId: number): string[] {
+  const uniqueNames = Array.from(new Set(employees.map((e) => e.name)));
+  return seededPick(uniqueNames, RECENT_VISITORS_COUNT, lastEventId + RECENT_VISITORS_SEED_OFFSET);
 }
 
 export function MuralTab({ snapshot }: MuralTabProps) {
@@ -57,6 +76,17 @@ export function MuralTab({ snapshot }: MuralTabProps) {
 
   const genStartMc = snapshot?.cards.genStartMc;
   const posts = useMemo(() => buildMuralPosts(feed, genStartMc), [feed, genStartMc]);
+  const employees = snapshot?.org.employees ?? [];
+  const lastEventId = snapshot?.lastEventId ?? 0;
+  const recentVisitors = useMemo(
+    () => recentVisitorNames(employees, lastEventId),
+    // employees is a fresh array reference on every snapshot poll even when
+    // its content is unchanged — keying off its length + lastEventId (both
+    // primitives) avoids reshuffling on every render for no reason while
+    // still reacting to a real roster or feed change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [employees.length, lastEventId],
+  );
 
   if (posts.length === 0) {
     return <p>Sem eventos ainda.</p>;
@@ -77,7 +107,14 @@ export function MuralTab({ snapshot }: MuralTabProps) {
       </div>
 
       <div className="orkut-body">
-        <p className="orkut-visitor-counter">você é o visitante nº {visitorNumber(snapshot?.lastEventId ?? 0)}</p>
+        <p className="orkut-visitor-counter">você é o visitante nº {visitorNumber(lastEventId)}</p>
+
+        {recentVisitors.length > 0 && (
+          <p className="orkut-recent-visitors">
+            visitas recentes: {recentVisitors.join(", ")}{" "}
+            <span className="orkut-decorative-tag">(decorativo — ninguém está de fato batendo ponto aqui)</span>
+          </p>
+        )}
 
         <div className="orkut-communities">
           <h4>comunidades</h4>
@@ -92,6 +129,7 @@ export function MuralTab({ snapshot }: MuralTabProps) {
           {posts.map((post) => {
             const highlighted = post.memberIds.some((id) => newIds.has(id));
             const reactions = seededReactions(post.reactionSeed, post.includeSad);
+            const karma = seededKarma(post.reactionSeed);
 
             return (
               <motion.li
@@ -111,6 +149,9 @@ export function MuralTab({ snapshot }: MuralTabProps) {
                 <div className="orkut-scrap-main">
                   <div className="orkut-scrap-header">
                     <span className="orkut-author-link">{post.author.name}</span>
+                    <span className="orkut-karma" title="karma decorativo, ninguém audita isso">
+                      ★ {karma} karma
+                    </span>
                     <span className="orkut-cargo">{post.author.cargo}</span>
                   </div>
 

@@ -58,3 +58,37 @@ export function seededReactions(seed: number, includeSad: boolean): ReactionCoun
   const sad = includeSad ? Math.floor(rng() * (REACTION_MAX + 1)) : null;
   return { clap, fire, sad };
 }
+
+const KARMA_MAX = 999;
+
+/**
+ * Deterministic decorative "karma" score shown next to a Mural post's
+ * author name (v4 plan's Task B2 Orkut escalation) — seeded the same way
+ * as `seededReactions` (the underlying feed event id), via its OWN
+ * `mulberry32` instance so it never shares draws with the reactions rng.
+ * Same event, same karma, forever; purely decorative, no real reputation
+ * system backs this number (same "never fake DATA" rule as the joke
+ * communities box and the visitor counter).
+ */
+export function seededKarma(seed: number): number {
+  const rng = mulberry32(seed >>> 0);
+  return 1 + Math.floor(rng() * KARMA_MAX);
+}
+
+/**
+ * Deterministically shuffles `names` (Fisher-Yates over a COPY — the input
+ * array is never mutated) and returns the first `count` — used by the
+ * Mural's "visitas recentes" decorative line (v4 Task B2) to pick 2-3 names
+ * "pulled from known traders" without ever touching `Math.random`. Pure
+ * function of `seed`, so the same roster + seed always yields the same
+ * displayed visitors across renders/reconnects.
+ */
+export function seededPick<T>(items: T[], count: number, seed: number): T[] {
+  const rng = mulberry32(seed >>> 0);
+  const shuffled = [...items];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled.slice(0, Math.max(0, Math.min(count, shuffled.length)));
+}

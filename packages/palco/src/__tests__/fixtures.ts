@@ -5,8 +5,8 @@ import type { PalcoSnapshot } from "../types";
  *
  * The `feed` array is ordered newest-first (id descending), matching the
  * real API. It's deliberately built to exercise MuralTab's post-building
- * rules (v3.2 "less frequent" pass, individual-trade threshold = 1% of
- * this fixture's genStartMc = $0.10): a big-win BTCUSDT trade well above
+ * rules (v4 "even less frequent" pass, individual-trade threshold = 2% of
+ * this fixture's genStartMc = $0.20): a big-win BTCUSDT trade well above
  * that threshold (its own spotlight post), a
  * trade_opened event (id 41 — dropped entirely from the Mural, stays only
  * in Pregão/the ticker), and TWO small ETHUSDT trade_closed events that are
@@ -126,7 +126,7 @@ export const fixtureSnapshot: PalcoSnapshot = {
       ts: 1_700_000_500_000,
       type: "trade_closed",
       html: "fechou BTCUSDT · P&amp;L $1.50",
-      // $1.50 — above this fixture's $0.10 individual-post threshold (1% of
+      // $1.50 — above this fixture's $0.20 individual-post threshold (2% of
       // genStartMc), so this stays its own spotlight "big win" post instead
       // of folding into a grouped resumo.
       payload: { symbol: "BTCUSDT", priceCents: 6_000_000, realizedPnlMc: 150_000, feeMc: 100, liquidated: false },

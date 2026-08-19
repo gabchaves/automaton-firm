@@ -44,14 +44,15 @@ export interface MuralPost {
   pnlClass?: "pos" | "neg";
 }
 
-// Individual trade_closed posts only survive above this bar — 1% of the
-// generation's starting bankroll (v3.2 plan's "less frequent" pass, raised
-// from the v3 plan's flat $0.05). Everything smaller folds into one grouped
-// "resumo da mesa {symbol}" post per symbol per render instead of flooding
-// the wall. Scale-derived: at the Motor's current 100_000_000 genStartMc
-// that's $10.00; the threshold moves automatically with any bankroll change.
+// Individual trade_closed posts only survive above this bar — 2% of the
+// generation's starting bankroll (v4 plan's "even less frequent, more
+// Orkut" pass, raised from the v3.2 plan's 1%, itself raised from the v3
+// plan's flat $0.05). Everything smaller folds into one grouped "resumo da
+// mesa {symbol}" post per symbol per render instead of flooding the wall.
+// Scale-derived: at the Motor's current 100_000_000 genStartMc that's
+// $20.00; the threshold moves automatically with any bankroll change.
 const DEFAULT_GEN_START_MC = 100_000_000; // sane fallback, mirrors palco-data.ts's GEN_START_MC
-const SMALL_TRADE_DIVISOR = 100;
+const SMALL_TRADE_DIVISOR = 50;
 
 function num(payload: Record<string, unknown>, key: string, fallback = 0): number {
   const value = payload[key];
@@ -260,7 +261,7 @@ function buildEventPost(item: FeedItem): MuralPost {
  * - `trade_opened` never becomes a post — it stays visible in the Pregão
  *   trades list and the ticker-tape, but the Mural doesn't need an "opened
  *   a position" scrap for every trade.
- * - `trade_closed` posts individually only when |pnl| >= 1% of `genStartMc`
+ * - `trade_closed` posts individually only when |pnl| >= 2% of `genStartMc`
  *   (see `DEFAULT_GEN_START_MC`/`SMALL_TRADE_DIVISOR` above); smaller ones
  *   fold into one "resumo da mesa {symbol}" post per symbol, aggregated
  *   across the WHOLE rendered feed (not just consecutive entries).
