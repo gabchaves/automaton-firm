@@ -311,3 +311,29 @@ node scripts/lineage-server.mjs --port 7878 --open
 
 Generated reports land in `reports/` (git-ignored). Design specs and
 implementation plans for every component live in `docs/superpowers/`.
+
+## Patience gene + HR rotation (2026-08-19, live era)
+
+Diagnosis before the change (8.5 days, $1,000 firm): 100 trades, 7% win rate,
+**$37.30 paid in fees against ≈ +$3 gross** — activity was anti-correlated with
+book size (52 trades → $182.97; 0 trades → $200.00 intact). Verdict: the traders
+were not risking too little, they were **churning**.
+
+Two changes shipped, both evidence-shaped rather than risk-shaped:
+- **HR rotation of unevaluable seats** — a trader alive ≥ 5 days with fewer than
+  5 lifetime trades is rotated out (fresh random genome hired), one per review.
+  Never a performance verdict; prudence that pays is still never punished.
+- **Patience gene (`minHoldBars`, 0–24)** — the exit signal is suppressed until a
+  position matures. Liquidation is never suppressed. Both cohorts sample the
+  same bounds.
+
+First measurement on the same 8-day replay window, same market:
+
+| Cohort | Before patience | With patience |
+|---|---|---|
+| Firm (evolved) | $966 | **$976** |
+| Random control | $231 | **$736** |
+
+The control's fivefold improvement is the finding: **the losses were fees, not
+signals**. Patience does not create an edge — it stops paying for its absence,
+and it lifts the honest baseline the firm has to beat far higher than before.
