@@ -337,6 +337,24 @@ describe("buildSnapshot: org.history", () => {
       snap.org.history.some((h) => h.type === "trader_hired" && (h.payload as { name: string }).name === "Antigo"),
     ).toBe(false);
   });
+
+  test("trader_rotated is a tracked type (rotation surfaces in the org timeline, same as a firing)", () => {
+    const d = fresh();
+    d.insertGeneration(generationRow({ id: "g1", cohort: "evolved", genNumber: 1, startedAt: 0, endedAt: null }));
+    d.insertEvent({ ts: 0, type: "gen_started", traderId: null, generationId: "g1", payloadJson: JSON.stringify({ cohort: "evolved", genNumber: 1, seedNote: "fresh" }) });
+    const rotatedPayload = {
+      name: "Fê Ramos",
+      reason: "Rotação por falta de evidência: 5 dias sem gerar trades avaliáveis. Sem julgamento — a cadeira precisa produzir informação.",
+      returnedMc: 200_000,
+    };
+    d.insertEvent({ ts: 10, type: "trader_rotated", traderId: "e1", generationId: "g1", payloadJson: JSON.stringify(rotatedPayload) });
+
+    const snap = buildSnapshot(d.raw, 0);
+
+    expect(snap.org.history.map((h) => h.type)).toEqual(["gen_started", "trader_rotated"]);
+    expect(snap.org.history[1].html).toBe(formatEventPt("trader_rotated", rotatedPayload));
+    expect(snap.org.history[1].payload).toEqual(rotatedPayload);
+  });
 });
 
 describe("buildSnapshot: leaderboard open positions", () => {

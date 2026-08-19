@@ -30,9 +30,18 @@ import { traderName } from "./names.js";
 import type { MotorDb } from "./db.js";
 import type { MotorEventDraft } from "./events.js";
 
-export const HR_WINDOW_MS = 7 * 24 * 3_600_000;
+const DAY_MS = 24 * 3_600_000;
+
+export const HR_WINDOW_MS = 7 * DAY_MS;
 export const MOTOR_HR_CONFIG: HrConfig = { minTradesForEvidence: 5, excessBandCents: 2500 };
 export const MIN_HIRE_STAKE_MC = 10_000_000; // $100.00 — below this the reserve just waits
+
+// Exploration-pressure rotation (measured verdict: median trade was
+// fee-dominated, activity was anti-correlated with book — the fix is more
+// genome turnover, not more risk). A seat that has produced too little
+// evidence for HR to ever judge it gets rotated to a fresh genome — NEVER a
+// performance judgment, purely age + lifetime trade-count.
+export const ROTATION_AGE_MS = 5 * DAY_MS;
 
 // The label lives in achievements.ts (ACHIEVEMENT_LABELS.beat_benchmark, Task 9).
 // Kept as a literal here so this module has no dependency on achievements.ts;
@@ -89,12 +98,21 @@ function buildEvidence(
 
 interface FireOutcome { trader: TraderRuntime; returnedMc: number; event: MotorEventDraft }
 
+/**
+ * Shared mechanics for both a performance firing and an evidence-blind
+ * rotation: forceClose (no-op if flat), book the residual to the firm
+ * reserve, mark the seat "fired" in the DB sense. Only the emitted event
+ * TYPE differs — `eventType` lets rotation announce itself honestly as
+ * `trader_rotated` instead of `trader_fired`, so the front never has to
+ * infer intent from the reason string.
+ */
 function fireTrader(
   t: TraderRuntime,
   reason: string,
   ts: number,
   generationId: string,
   closeBySymbol: Map<string, number>,
+  eventType: "trader_fired" | "trader_rotated" = "trader_fired",
 ): FireOutcome {
   const price = closeBySymbol.get(t.genome.symbol) ?? t.step.entryPriceCents;
   const outcome = forceClose(t.step, price, {
@@ -115,11 +133,35 @@ function fireTrader(
   };
 
   const event: MotorEventDraft = {
-    ts, type: "trader_fired", traderId: t.id, generationId,
+    ts, type: eventType, traderId: t.id, generationId,
     payload: { name: t.name, reason, returnedMc },
   };
 
   return { trader, returnedMc, event };
+}
+
+/** Oldest LIVE evolved trader that has aged past ROTATION_AGE_MS without
+ * producing enough lifetime trades to ever be judged — or null when none
+ * qualify. Age + lifetime trade count ONLY: never reads netCents/benchmark,
+ * so this can never be mistaken for a performance signal. */
+function findRotationCandidate(
+  db: MotorDb,
+  traders: TraderRuntime[],
+  ts: number,
+): TraderRuntime | null {
+  const eligible = traders.filter(
+    (t) =>
+      t.status === "live" &&
+      ts - t.bornAt >= ROTATION_AGE_MS &&
+      db.countTradeCloses(t.id, t.bornAt, ts) < MOTOR_HR_CONFIG.minTradesForEvidence,
+  );
+  if (eligible.length === 0) return null;
+  return eligible.reduce((oldest, t) => (t.bornAt < oldest.bornAt ? t : oldest));
+}
+
+function rotationReason(ts: number, bornAt: number): string {
+  const days = Math.round(((ts - bornAt) / DAY_MS) * 10) / 10;
+  return `Rotação por falta de evidência: ${days} dias sem gerar trades avaliáveis. Sem julgamento — a cadeira precisa produzir informação.`;
 }
 
 interface HireOutcome { trader: TraderRuntime; event: MotorEventDraft }
@@ -132,10 +174,16 @@ function hireReplacement(
   ts: number,
   generationId: string,
   mkId: () => string,
+  // A mutant of the current best is what a replacement hire does by
+  // default — exploitation. A rotation exists specifically to inject
+  // diversity instead, so the ONE hire that refills a just-rotated seat
+  // forces a fresh randomGenome (and, since it isn't derived from anyone,
+  // no lineage: parentTraderId is null on that hire's event).
+  forceRandomGenome = false,
 ): HireOutcome {
   // Same top-1 semantics as topGenomes (peakBookMc desc, stable on ties), but
   // keeping the owning trader so the hire's lineage survives into the event.
-  const parentTrader = liveGenomes.traders.reduce<TraderRuntime | null>(
+  const parentTrader = forceRandomGenome ? null : liveGenomes.traders.reduce<TraderRuntime | null>(
     (best, t) => (best === null || t.peakBookMc > best.peakBookMc ? t : best),
     null,
   );
@@ -235,9 +283,29 @@ export function runHrReview(deps: {
     events.push(...promoteTrader(db, t, ts, generationId));
   }
 
+  // AFTER fire/promote/hold: rotate at most one seat — the oldest LIVE
+  // evolved trader that has aged past ROTATION_AGE_MS without producing
+  // enough lifetime trades to ever be judged. Pure age + count gate, never
+  // performance — a trader already fired/promoted above is excluded simply
+  // by no longer being "live" in `traders`.
+  let forceRandomForNextHire = false;
+  const rotationCandidate = findRotationCandidate(db, traders, ts);
+  if (rotationCandidate) {
+    const rotated = fireTrader(
+      rotationCandidate, rotationReason(ts, rotationCandidate.bornAt), ts, generationId, closeBySymbol,
+      "trader_rotated",
+    );
+    reserveMc += rotated.returnedMc;
+    events.push(rotated.event);
+    traders = traders.map((t) => (t.id === rotationCandidate.id ? rotated.trader : t));
+    forceRandomForNextHire = true;
+  }
+
   // Hire replacements while the reserve can afford it and there is room on
   // the roster. Each new hire's mutation parent is the best genome among
-  // the traders still live at that point.
+  // the traders still live at that point — except the first hire after a
+  // rotation, which is forced to a fresh randomGenome instead (see
+  // hireReplacement's forceRandomGenome doc comment).
   while (reserveMc >= MIN_HIRE_STAKE_MC) {
     const liveCount = traders.filter((t) => t.status === "live").length;
     if (liveCount >= ROSTER_SIZE) break;
@@ -245,7 +313,10 @@ export function runHrReview(deps: {
     const stakeMc = Math.min(reserveMc, TRADER_START_MC);
     const liveOnly: CohortRuntime = { ...evolved, traders: traders.filter((t) => t.status === "live") };
     const slot = nextSlot(traders);
-    const hired = hireReplacement(liveOnly, slot, stakeMc, evolved.genNumber, ts, generationId, mkId);
+    const hired = hireReplacement(
+      liveOnly, slot, stakeMc, evolved.genNumber, ts, generationId, mkId, forceRandomForNextHire,
+    );
+    forceRandomForNextHire = false;
 
     reserveMc -= stakeMc;
     traders = [...traders, hired.trader];

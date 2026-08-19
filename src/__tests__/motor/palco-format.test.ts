@@ -43,6 +43,17 @@ describe("formatEventPt", () => {
     expect(html).toBe("📦 <strong>Bento Alves</strong> demitido(a) · devolveu $1.50<br><small>underperform</small>");
   });
 
+  test("trader_rotated", () => {
+    const html = formatEventPt("trader_rotated", {
+      name: "Fê Ramos",
+      reason: "Rotação por falta de evidência: 5 dias sem gerar trades avaliáveis. Sem julgamento — a cadeira precisa produzir informação.",
+      returnedMc: 200_000,
+    });
+    expect(html).toBe(
+      "🔄 <strong>Fê Ramos</strong> girou a cadeira · devolveu $2.00<br><small>Rotação por falta de evidência: 5 dias sem gerar trades avaliáveis. Sem julgamento — a cadeira precisa produzir informação.</small>",
+    );
+  });
+
   test("trader_died", () => {
     const html = formatEventPt("trader_died", { name: "Caue Reis", slot: 0, ageMs: 5_400_000, bookPeakMc: 220_000 });
     expect(html).toBe("💀 <strong>Caue Reis</strong> morreu · viveu 1.5h · pico $2.20");

@@ -46,6 +46,9 @@ const FORMATTERS: Record<string, (p: Payload) => string> = {
   trader_fired: (p) =>
     `📦 <strong>${str(p, "name")}</strong> demitido(a) · devolveu ${usd(p, "returnedMc")}<br><small>${str(p, "reason")}</small>`,
 
+  trader_rotated: (p) =>
+    `🔄 <strong>${str(p, "name")}</strong> girou a cadeira · devolveu ${usd(p, "returnedMc")}<br><small>${str(p, "reason")}</small>`,
+
   trader_died: (p) =>
     `💀 <strong>${str(p, "name")}</strong> morreu · viveu ${(num(p, "ageMs") / 3_600_000).toFixed(1)}h · pico ${usd(p, "bookPeakMc")}`,
 

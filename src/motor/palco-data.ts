@@ -64,7 +64,9 @@ const FEED_LIMIT = 40;
 const HR_POLICY_PT =
   "RH baseado em evidência: compara cada trader ao benchmark max(controle aleatório, não fazer nada) na mesma janela de 7 dias. Demite só com evidência clara de underperformance; evidência insuficiente nunca demite nem promove.";
 
-const ORG_HISTORY_TYPES = ["trader_hired", "trader_fired", "trader_promoted", "gen_started", "gen_ended"];
+const ORG_HISTORY_TYPES = [
+  "trader_hired", "trader_fired", "trader_rotated", "trader_promoted", "gen_started", "gen_ended",
+];
 
 type Cohort = "evolved" | "random";
 

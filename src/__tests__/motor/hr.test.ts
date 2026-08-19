@@ -4,8 +4,9 @@ import { tmpdir } from "os";
 import { join } from "path";
 import { openMotorDb } from "../../motor/db.js";
 import type { MotorDb } from "../../motor/db.js";
-import { HR_WINDOW_MS, MOTOR_HR_CONFIG, runHrReview } from "../../motor/hr.js";
-import { firmEquityMc, seedGeneration, TRADER_START_MC } from "../../motor/cohort.js";
+import { HR_WINDOW_MS, MOTOR_HR_CONFIG, ROTATION_AGE_MS, runHrReview } from "../../motor/hr.js";
+import { firmEquityMc, hashSeed, seedGeneration, TRADER_START_MC } from "../../motor/cohort.js";
+import { randomGenome } from "../../trading/genome.js";
 
 let db: MotorDb;
 let dir: string;
@@ -25,7 +26,14 @@ afterEach(() => {
 function cohorts() {
   const evolved = seedGeneration({ cohort: "evolved", genNumber: 1, startedAt: 0, parentGenomes: null, generationId: "ge", mkId }).runtime;
   const random = seedGeneration({ cohort: "random", genNumber: 1, startedAt: 0, parentGenomes: null, generationId: "gr", mkId }).runtime;
-  return { evolved, random };
+  // Recent bornAt (== the shared `ts` every fire/promote/hold test below
+  // reviews at) keeps every trader outside HR rotation's age gate by
+  // construction — those tests exercise the performance path, not rotation,
+  // and must not incidentally trigger it just because seedGeneration's
+  // traders all share bornAt=startedAt=0. The dedicated "HR rotation of
+  // unevaluable seats" suite below overrides bornAt explicitly per case.
+  const recentEvolved = { ...evolved, traders: evolved.traders.map((t) => ({ ...t, bornAt: HR_WINDOW_MS })) };
+  return { evolved: recentEvolved, random };
 }
 
 /** Give the random cohort flat nets (snapshot == book) so benchmark = 0. */
@@ -112,5 +120,115 @@ describe("runHrReview", () => {
     const before = JSON.stringify(random);
     runHrReview({ db: d, evolved, random, ts, closeBySymbol: new Map(), mkId });
     expect(JSON.stringify(random)).toBe(before);
+  });
+
+  describe("HR rotation of unevaluable seats", () => {
+    /** ts here is 7 days (HR_WINDOW_MS); `bornAt` overrides below place a
+     * trader at a specific age relative to that same instant. */
+    function withBornAt(evolved: ReturnType<typeof cohorts>["evolved"], overrides: Record<string, number>) {
+      return {
+        ...evolved,
+        traders: evolved.traders.map((t) => (t.id in overrides ? { ...t, bornAt: overrides[t.id] } : t)),
+      };
+    }
+
+    test("rotates the oldest LIVE evolved trader past the age gate with too few lifetime trades, hiring a FRESH (non-mutant) genome — never a performance judgment", () => {
+      const d = fresh();
+      const { evolved, random } = cohorts();
+      flatRandomSnapshots(d, random, 0);
+      for (const t of evolved.traders) d.insertTraderSnapshot(0, t.id, TRADER_START_MC);
+
+      const old = evolved.traders[2];
+      const aged = withBornAt(evolved, { [old.id]: ts - ROTATION_AGE_MS }); // exactly 5 days old
+      const randomBefore = JSON.stringify(random);
+
+      const result = runHrReview({ db: d, evolved: aged, random, ts, closeBySymbol: new Map(), mkId });
+
+      // The event is honestly typed trader_rotated, not trader_fired — the
+      // front must never have to infer "was this a judgment?" from prose.
+      expect(result.events.some((e) => e.type === "trader_fired")).toBe(false);
+      const rotatedEvent = result.events.find((e) => e.type === "trader_rotated");
+      expect(rotatedEvent).toBeDefined();
+      expect(rotatedEvent!.traderId).toBe(old.id);
+      expect(rotatedEvent!.payload).toEqual({
+        name: old.name,
+        reason: "Rotação por falta de evidência: 5 dias sem gerar trades avaliáveis. Sem julgamento — a cadeira precisa produzir informação.",
+        returnedMc: TRADER_START_MC,
+      });
+
+      // Roster mechanics identical to a firing: the old seat is "fired" in
+      // the DB sense, still 5 live overall (the seat gets refilled).
+      const original = result.evolved.traders.find((t) => t.id === old.id);
+      expect(original?.status).toBe("fired");
+      expect(result.evolved.traders.filter((t) => t.status === "live").length).toBe(5);
+
+      // FRESH randomGenome, not a mutant of the current best — no lineage.
+      const hiredEvent = result.events.find((e) => e.type === "trader_hired");
+      expect(hiredEvent).toBeDefined();
+      expect((hiredEvent!.payload as { parentTraderId: string | null }).parentTraderId).toBeNull();
+      const replacement = result.evolved.traders.find((t) => t.id === hiredEvent!.traderId);
+      const expectedSlot = 5; // nextSlot after 5 original slots 0..4
+      expect(replacement?.genome).toEqual(randomGenome(hashSeed(evolved.genNumber, ts % 1_000_003, expectedSlot)));
+
+      // Money conservation: the rotated seat's stake becomes the fresh
+      // hire's stake exactly, nothing created or destroyed.
+      expect(firmEquityMc(result.evolved, new Map())).toBe(firmEquityMc(aged, new Map()));
+
+      // Random cohort is never touched by rotation either.
+      expect(JSON.stringify(random)).toBe(randomBefore);
+    });
+
+    test("rotates at most one seat per review — the OLDEST eligible trader, even when several qualify", () => {
+      const d = fresh();
+      const { evolved, random } = cohorts();
+      flatRandomSnapshots(d, random, 0);
+      for (const t of evolved.traders) d.insertTraderSnapshot(0, t.id, TRADER_START_MC);
+
+      const [t0, t1, t2] = evolved.traders;
+      const oneDay = HR_WINDOW_MS / 7;
+      const aged = withBornAt(evolved, {
+        [t0.id]: ts - ROTATION_AGE_MS - 2 * oneDay, // oldest: 7 days
+        [t1.id]: ts - ROTATION_AGE_MS - 1 * oneDay, // 6 days
+        [t2.id]: ts - ROTATION_AGE_MS, // 5 days — also eligible, but not oldest
+      });
+
+      const result = runHrReview({ db: d, evolved: aged, random, ts, closeBySymbol: new Map(), mkId });
+
+      const rotatedEvents = result.events.filter((e) => e.type === "trader_rotated");
+      expect(rotatedEvents.length).toBe(1);
+      expect(rotatedEvents[0].traderId).toBe(t0.id);
+    });
+
+    test("a trader with >= minTradesForEvidence lifetime trades is NEVER rotated, no matter how old", () => {
+      const d = fresh();
+      const { evolved, random } = cohorts();
+      flatRandomSnapshots(d, random, 0);
+      for (const t of evolved.traders) d.insertTraderSnapshot(0, t.id, TRADER_START_MC);
+
+      const veteran = evolved.traders[1];
+      const aged = withBornAt(evolved, { [veteran.id]: ts - ROTATION_AGE_MS * 10 }); // very old
+      for (let k = 0; k < MOTOR_HR_CONFIG.minTradesForEvidence; k++) {
+        d.insertEvent({ ts: aged.traders.find((t) => t.id === veteran.id)!.bornAt + 1 + k, type: "trade_closed", traderId: veteran.id, generationId: "ge", payloadJson: "{}" });
+      }
+
+      const result = runHrReview({ db: d, evolved: aged, random, ts, closeBySymbol: new Map(), mkId });
+
+      expect(result.events.some((e) => e.type === "trader_rotated")).toBe(false);
+      expect(result.evolved.traders.find((t) => t.id === veteran.id)?.status).toBe("live");
+    });
+
+    test("a trader younger than the age gate is NEVER rotated, no matter how few trades", () => {
+      const d = fresh();
+      const { evolved, random } = cohorts();
+      flatRandomSnapshots(d, random, 0);
+      for (const t of evolved.traders) d.insertTraderSnapshot(0, t.id, TRADER_START_MC);
+
+      const young = evolved.traders[3];
+      const aged = withBornAt(evolved, { [young.id]: ts - ROTATION_AGE_MS + 1_000 }); // just under 5 days
+
+      const result = runHrReview({ db: d, evolved: aged, random, ts, closeBySymbol: new Map(), mkId });
+
+      expect(result.events.some((e) => e.type === "trader_rotated")).toBe(false);
+    });
   });
 });

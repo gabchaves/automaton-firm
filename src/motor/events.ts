@@ -83,6 +83,16 @@ export const EVENT_PAYLOAD_SCHEMAS = {
     returnedMc: z.number().int(),
   }),
 
+  // Evidence-blind seat rotation (HR plan, "exploration pressure"): NEVER a
+  // performance judgment — age + lifetime trade-count gate only. Same shape
+  // as trader_fired (roster mechanics are identical) but its own type so the
+  // front never has to guess intent from the reason string.
+  trader_rotated: z.strictObject({
+    name: z.string(),
+    reason: z.string(),
+    returnedMc: z.number().int(),
+  }),
+
   trader_hired: z.strictObject({
     name: z.string(),
     slot: z.number().int(),

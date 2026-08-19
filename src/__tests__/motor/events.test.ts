@@ -46,6 +46,29 @@ describe("emitEvents", () => {
       emitEvents(d, [{ ts: 1, type: "nonsense" as never, traderId: null, generationId: null, payload: {} }]),
     ).toThrow();
   });
+
+  test("trader_rotated payload validates (same shape as trader_fired, its own type)", () => {
+    const d = fresh();
+    emitEvents(d, [
+      {
+        ts: 1, type: "trader_rotated", traderId: "t1", generationId: "g1",
+        payload: { name: "Fê Ramos", reason: "Rotação por falta de evidência: 5 dias sem gerar trades avaliáveis. Sem julgamento — a cadeira precisa produzir informação.", returnedMc: 200_000 },
+      },
+    ]);
+    const rows = d.listEvents(0, 10);
+    expect(rows.map((r) => r.type)).toEqual(["trader_rotated"]);
+    expect(JSON.parse(rows[0].payloadJson).returnedMc).toBe(200_000);
+  });
+
+  test("trader_rotated rejects an unknown extra field (strict schema)", () => {
+    const d = fresh();
+    expect(() =>
+      emitEvents(d, [
+        { ts: 1, type: "trader_rotated", traderId: "t1", generationId: "g1", payload: { name: "X", reason: "Y", returnedMc: 1, extra: true } },
+      ]),
+    ).toThrow();
+    expect(d.listEvents(0, 10).length).toBe(0);
+  });
 });
 
 describe("traderName", () => {
