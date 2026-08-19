@@ -63,6 +63,10 @@ export function EmpresaTab({ snapshot }: EmpresaTabProps) {
       </section>
 
       <h2 className="section-title">Organograma</h2>
+      <p className="org-explainer">
+        Como a firma se organiza: o RH avalia todo mundo semanalmente contra o benchmark. Sêniores herdam genomas de
+        elite; trainees são apostas do RH no meio do ciclo; o grupo de controle joga moeda — e nos mantém honestos.
+      </p>
       {employees.length === 0 ? (
         <p className="empty-state">Sem funcionários ainda.</p>
       ) : (

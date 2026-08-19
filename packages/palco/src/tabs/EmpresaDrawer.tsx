@@ -6,6 +6,7 @@ import { initials, avatarBackground } from "../avatar";
 import { moodEmoji } from "../mood";
 import { lineageLine, type Employee } from "../lineage";
 import { combinatorPhrase, geneChipLabel } from "../genome-format";
+import { cargoForEmployee } from "../cargo";
 
 type LeaderboardEntry = PalcoSnapshot["leaderboard"][number];
 
@@ -84,6 +85,7 @@ function DrawerContent({ employee, leaderboardEntry, onClose, stakeMc }: DrawerC
   const lineage = lineageLine(employee);
   const genome = leaderboardEntry?.genome;
   const achievements = leaderboardEntry?.achievements ?? [];
+  const cargo = cargoForEmployee(employee, leaderboardEntry);
   const pnlClass = leaderboardEntry
     ? `mono-bold ${leaderboardEntry.realizedPnlMc >= 0 ? "pnl-value pnl-pos" : "pnl-value pnl-neg"}`
     : "mono-bold";
@@ -101,14 +103,20 @@ function DrawerContent({ employee, leaderboardEntry, onClose, stakeMc }: DrawerC
         </div>
         <div>
           <h2 className="empresa-drawer-name">{employee.name}</h2>
+          <div className="label empresa-drawer-titulo">{cargo.titulo}</div>
           <div className="empresa-drawer-cargo">
-            Trader · Mesa {employee.symbol} · {employee.leverage}x
+            Mesa {employee.symbol} · {employee.leverage}x
           </div>
           <span className={`status-chip ${STATUS_CLASS[employee.status] ?? ""}`}>
             {STATUS_PT[employee.status] ?? employee.status}
           </span>
         </div>
       </div>
+
+      <section>
+        <h3 className="empresa-drawer-subtitle label">Papel na firma</h3>
+        <p className="empresa-drawer-papel">{cargo.papel}</p>
+      </section>
 
       <dl className="empresa-drawer-stats">
         <div>

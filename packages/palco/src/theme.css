@@ -826,6 +826,19 @@ li.orkut-scrap:last-child {
   text-overflow: ellipsis;
 }
 
+/* Cargo (job title) line — small, muted, sits between the name and the
+ * book/status line. Empresa v3.2 "cargos e papéis" pass; the full papel
+ * paragraph lives in the profile drawer (see EmpresaDrawer's "Papel na
+ * firma" section), this is just the compact chip-adjacent label. */
+.org-node-cargo {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--lightgrey);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .org-node-book {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
@@ -938,6 +951,19 @@ ul.history-timeline li {
   margin-bottom: 8px;
 }
 
+/* Cargo titulo chip (v3.2 "cargos e papéis" pass) — reuses the site's
+ * signature `.label` chip look, rendered prominently right under the name,
+ * above the existing mesa/leverage line. */
+.empresa-drawer-titulo {
+  margin-bottom: 8px;
+}
+
+.empresa-drawer-papel {
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 0 0 8px;
+}
+
 .empresa-drawer-stats {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -980,6 +1006,17 @@ ul.history-timeline li {
 .empresa-drawer-genome-sentence {
   font-size: 13px;
   margin: 0 0 8px;
+}
+
+/* Empresa's organograma explainer (v3.2 "cargos e papéis" pass) — same
+ * mono/muted treatment as .gen-explainer below, scoped to its own class
+ * since each tab owns its explainer copy independently. */
+.org-explainer {
+  font-family: var(--font-mono);
+  color: var(--lightgrey);
+  max-width: 76ch;
+  margin: 12px 0 20px;
+  font-size: 12.5px;
 }
 
 /* ---------- Gerações ---------- */

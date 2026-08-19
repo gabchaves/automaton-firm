@@ -5,6 +5,7 @@ import { usd, hoursUntilNextUtcMidnight } from "../format";
 import { initials, avatarBackground } from "../avatar";
 import { moodEmoji } from "../mood";
 import { lineageLine, type Employee } from "../lineage";
+import { cargoForEmployee } from "../cargo";
 import { EmpresaDrawer } from "./EmpresaDrawer";
 
 type LeaderboardEntry = PalcoSnapshot["leaderboard"][number];
@@ -51,6 +52,7 @@ interface EmployeeNodeData extends Record<string, unknown> {
   tooltip?: string;
   onSelect: (traderId: string) => void;
   stakeMc: number;
+  cargoTitulo: string; // cargo.ts's titulo — short job-title line under the name
 }
 
 interface RhNodeData extends Record<string, unknown> {
@@ -75,7 +77,7 @@ type OrgFlowNode = EmployeeFlowNode | RhFlowNode | CaptionFlowNode;
  * (this is a read-only diagram), but the node still needs its own
  * keyboard affordance since xyflow doesn't make custom nodes focusable. */
 function EmployeeNodeView({ data }: NodeProps<EmployeeFlowNode>) {
-  const { employee, tooltip, onSelect, stakeMc } = data;
+  const { employee, tooltip, onSelect, stakeMc, cargoTitulo } = data;
   const dim = employee.status !== "live";
 
   function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
@@ -104,6 +106,7 @@ function EmployeeNodeView({ data }: NodeProps<EmployeeFlowNode>) {
           {employee.name}
           <span className="mood-emoji">{moodEmoji(employee.status, employee.bookMc, stakeMc)}</span>
         </div>
+        <div className="org-node-cargo">{cargoTitulo}</div>
         <div className="org-node-book">{usd(employee.bookMc)}</div>
         <span className={`status-chip ${STATUS_CLASS[employee.status] ?? ""}`}>
           {STATUS_PT[employee.status] ?? employee.status}
@@ -145,27 +148,37 @@ function CaptionNodeView({ data }: NodeProps<CaptionFlowNode>) {
 
 const NODE_TYPES: NodeTypes = { employee: EmployeeNodeView, rh: RhNodeView, caption: CaptionNodeView };
 
-/** Lays out one horizontal row of employee nodes, centered on x=0. */
+/** Lays out one horizontal row of employee nodes, centered on x=0. Each
+ * node's cargo.titulo (see cargo.ts) is derived here by joining the
+ * employee against `leaderboard` by traderId — same join pattern the
+ * profile drawer already uses for the genome section; a generation seed
+ * with no live leaderboard row just yields families: [] (cargoForEmployee
+ * degrades gracefully, no crash). */
 function rowNodes(
   list: Employee[],
   y: number,
   onSelect: (traderId: string) => void,
   stakeMc: number,
+  leaderboard: LeaderboardEntry[],
 ): EmployeeFlowNode[] {
   const n = list.length;
-  return list.map((employee, index) => ({
-    id: employee.traderId,
-    type: "employee",
-    position: { x: (index - (n - 1) / 2) * ROW_STEP_X, y },
-    measured: { width: NODE_WIDTH, height: NODE_HEIGHT },
-    handles: [
-      { type: "target", position: Position.Top, x: NODE_WIDTH / 2, y: 0 },
-      { type: "source", position: Position.Bottom, x: NODE_WIDTH / 2, y: NODE_HEIGHT },
-    ],
-    data: { employee, tooltip: lineageTitle(employee), onSelect, stakeMc },
-    draggable: false,
-    selectable: false,
-  }));
+  return list.map((employee, index) => {
+    const leaderboardEntry = leaderboard.find((entry) => entry.traderId === employee.traderId) ?? null;
+    const cargoTitulo = cargoForEmployee(employee, leaderboardEntry).titulo;
+    return {
+      id: employee.traderId,
+      type: "employee",
+      position: { x: (index - (n - 1) / 2) * ROW_STEP_X, y },
+      measured: { width: NODE_WIDTH, height: NODE_HEIGHT },
+      handles: [
+        { type: "target", position: Position.Top, x: NODE_WIDTH / 2, y: 0 },
+        { type: "source", position: Position.Bottom, x: NODE_WIDTH / 2, y: NODE_HEIGHT },
+      ],
+      data: { employee, tooltip: lineageTitle(employee), onSelect, stakeMc, cargoTitulo },
+      draggable: false,
+      selectable: false,
+    };
+  });
 }
 
 function buildGraph(
@@ -175,6 +188,7 @@ function buildGraph(
   promocoes: number,
   onSelect: (traderId: string) => void,
   stakeMc: number,
+  leaderboard: LeaderboardEntry[],
 ): { nodes: OrgFlowNode[]; edges: Edge[] } {
   const firmAll = employees.filter((e) => e.cohort === "evolved"); // RH edges + lineage sources span every status
   const firmLive = firmAll.filter((e) => e.status === "live");
@@ -198,8 +212,8 @@ function buildGraph(
 
   const nodes: OrgFlowNode[] = [
     rhNode,
-    ...rowNodes(firmLive, FIRM_ROW_Y, onSelect, stakeMc),
-    ...rowNodes(controlLive, CONTROL_ROW_Y, onSelect, stakeMc),
+    ...rowNodes(firmLive, FIRM_ROW_Y, onSelect, stakeMc, leaderboard),
+    ...rowNodes(controlLive, CONTROL_ROW_Y, onSelect, stakeMc, leaderboard),
   ];
 
   if (fallen.length > 0) {
@@ -213,7 +227,7 @@ function buildGraph(
       draggable: false,
       selectable: false,
     };
-    nodes.push(captionNode, ...rowNodes(fallen, FALLEN_ROW_Y, onSelect, stakeMc));
+    nodes.push(captionNode, ...rowNodes(fallen, FALLEN_ROW_Y, onSelect, stakeMc, leaderboard));
   }
 
   const edges: Edge[] = [];
@@ -275,8 +289,8 @@ export function OrgGraph({ employees, hrPolicy, leaderboard, demissoes, promocoe
   const [selectedTraderId, setSelectedTraderId] = useState<string | null>(null);
 
   const { nodes, edges } = useMemo(
-    () => buildGraph(employees, hrPolicy, demissoes, promocoes, setSelectedTraderId, stakeMc),
-    [employees, hrPolicy, demissoes, promocoes, stakeMc],
+    () => buildGraph(employees, hrPolicy, demissoes, promocoes, setSelectedTraderId, stakeMc, leaderboard),
+    [employees, hrPolicy, demissoes, promocoes, stakeMc, leaderboard],
   );
 
   const selectedEmployee = selectedTraderId

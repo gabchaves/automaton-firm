@@ -43,11 +43,23 @@ describe("EmpresaTab", () => {
     );
     expect(employeeNames).toEqual(["Ada Faria", "Beto Nunes", "Rand-7", "Caue Reis"]);
 
-    // Mesa/cargo text is intentionally NOT on the compact node (v3 Task 3
-    // spec: avatar, name + mood, book mono, status chip only) — Leaderboard
-    // already owns the mesa/leverage display, no need to duplicate it here.
+    // Mesa/leverage text is still NOT duplicated on the compact node (v3
+    // Task 3 spec: Leaderboard already owns that display) — but v3.2 adds a
+    // cargo.titulo line (job title, not mesa) between the name and the book.
     expect(screen.getByText("$7.00")).toBeInTheDocument(); // Ada Faria's bookMc = 700_000
     expect(screen.getByText("demitido")).toBeInTheDocument(); // Caue Reis's status
+  });
+
+  it("renders each employee's cargo.titulo (job title) on its compact node — Beto Nunes is an HR mid-cycle trainee", () => {
+    render(<EmpresaTab snapshot={fixtureSnapshot} />);
+
+    const betoNode = orgNodeByEmployeeName("Beto Nunes");
+    expect(betoNode.querySelector(".org-node-cargo")).toHaveTextContent("Trader Trainee · aposta do RH");
+  });
+
+  it("renders a compact, mono explainer above the graph describing how the firm is organized", () => {
+    render(<EmpresaTab snapshot={fixtureSnapshot} />);
+    expect(screen.getByText(/Como a firma se organiza/)).toBeInTheDocument();
   });
 
   it("renders the RH node top-of-graph with hrPolicy as a title tooltip", () => {
@@ -116,6 +128,28 @@ describe("EmpresaTab", () => {
 
       expect(screen.getByText("Beto Nunes", { selector: ".empresa-drawer-name" })).toBeInTheDocument();
       expect(screen.getByText("sem dados de mesa desta geração")).toBeInTheDocument();
+    });
+
+    it("shows the cargo.titulo chip and a 'Papel na firma' section for Beto Nunes (HR mid-cycle trainee)", () => {
+      render(<EmpresaTab snapshot={fixtureSnapshot} />);
+
+      fireEvent.click(orgNodeByEmployeeName("Beto Nunes"));
+
+      expect(screen.getByText("Trader Trainee · aposta do RH", { selector: ".empresa-drawer-titulo" })).toBeInTheDocument();
+      expect(screen.getByText("Papel na firma")).toBeInTheDocument();
+      expect(screen.getByText(/Contratado\(a\) no meio do ciclo como mutação do melhor genoma vivo/)).toBeInTheDocument();
+      // No leaderboard row for Beto — families: [], so the mesa clause is
+      // still there but no specialty sentence gets fabricated.
+      expect(screen.getByText(/Mesa ETHUSDT · 1x\.$/)).toBeInTheDocument();
+    });
+
+    it("shows Ada Faria's cargo.titulo and a multi-strategist papel derived from her momentum+breakout genome", () => {
+      render(<EmpresaTab snapshot={fixtureSnapshot} />);
+
+      fireEvent.click(orgNodeByEmployeeName("Ada Faria"));
+
+      expect(screen.getByText("Trader Júnior · contratação externa", { selector: ".empresa-drawer-titulo" })).toBeInTheDocument();
+      expect(screen.getByText(/Multiestrategista: combina momentum\/breakout\./)).toBeInTheDocument();
     });
   });
 });
