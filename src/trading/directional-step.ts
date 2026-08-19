@@ -20,6 +20,11 @@ export interface DirectionalStepState {
   qty: number; // asset units; position value in mc = qty * priceCents * MC_PER_CENT
   entryPriceCents: number;
   cycleStartCashMc: number; // cash before the current cycle's entry fee
+  // Patience gene support: 0 on the bar a position opens, +1 each
+  // subsequent bar it stays open, reset to 0 once flat again. Missing on
+  // legacy persisted state_json — callers that load from JSON must default
+  // it to 0 (see motor/tick.ts's loadRuntime).
+  heldBars: number;
   died: boolean;
 }
 
@@ -40,6 +45,7 @@ export function initDirectionalStepState(startMc: number): DirectionalStepState 
     qty: 0,
     entryPriceCents: 0,
     cycleStartCashMc: 0,
+    heldBars: 0,
     died: false,
   };
 }
@@ -71,6 +77,7 @@ function closePosition(
       inPosition: false,
       qty: 0,
       entryPriceCents: 0,
+      heldBars: 0,
       died: true,
     };
     return {
@@ -93,6 +100,7 @@ function closePosition(
     inPosition: false,
     qty: 0,
     entryPriceCents: 0,
+    heldBars: 0,
     died,
   };
   return {
@@ -132,6 +140,7 @@ export function stepDirectional(
       qty: died ? 0 : qty,
       entryPriceCents: died ? 0 : priceCents,
       cycleStartCashMc: state.cashMc,
+      heldBars: 0, // opening bar
       died,
     };
     return {
@@ -148,9 +157,13 @@ export function stepDirectional(
   const unrealizedMc = Math.round(state.qty * (priceCents - state.entryPriceCents) * MC_PER_CENT);
   const equityMc = state.cashMc + unrealizedMc;
 
+  // Liquidation is checked FIRST and unconditionally — patience (a forced
+  // wantLong=true from the caller, see cohort.ts's stepOneTrader) can only
+  // ever suppress the `!wantLong` disjunct below, never this equity check.
   if (equityMc <= 0 || !wantLong) return closePosition(state, priceCents, params);
 
-  return { ...flatOutcome(state), equityMc };
+  const held: DirectionalStepState = { ...state, heldBars: state.heldBars + 1 };
+  return { ...flatOutcome(held), equityMc };
 }
 
 /** Close any open position at `priceCents` (used when HR fires a trader). */

@@ -9,6 +9,7 @@ function base(overrides: Partial<Genome>): Genome {
     combinator: "all",
     leverage: 1,
     riskFraction: 1,
+    minHoldBars: 0,
     ...overrides,
   };
 }

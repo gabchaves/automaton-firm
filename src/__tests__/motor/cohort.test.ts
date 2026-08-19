@@ -44,20 +44,20 @@ describe("seedGeneration", () => {
 });
 
 describe("stepCohortBar", () => {
-  function forcedGenome() {
+  function forcedGenome(minHoldBars = 0) {
     // momentum(3,12) on BTC with max leverage: goes long in a rising series
     return {
       symbol: "BTCUSDT" as const,
       genes: [{ family: "momentum" as const, fastBars: 3, slowBars: 12 }],
-      combinator: "all" as const, leverage: 3, riskFraction: 1,
+      combinator: "all" as const, leverage: 3, riskFraction: 1, minHoldBars,
     };
   }
 
-  function runSeries(prices: number[]): ReturnType<typeof stepCohortBar> {
+  function runSeries(prices: number[], minHoldBars = 0): ReturnType<typeof stepCohortBar> {
     const seeded = seedEvolved(null);
     let runtime = {
       ...seeded.runtime,
-      traders: seeded.runtime.traders.map((t) => ({ ...t, genome: forcedGenome() })),
+      traders: seeded.runtime.traders.map((t) => ({ ...t, genome: forcedGenome(minHoldBars) })),
     };
     let last: ReturnType<typeof stepCohortBar> | null = null;
     // Accumulate events across the whole run: with identical forced genomes
@@ -109,5 +109,53 @@ describe("stepCohortBar", () => {
     const traders = seeded.runtime.traders.map((t, i) => ({ ...t, peakBookMc: 100 * (5 - i) }));
     const shuffled = { ...seeded.runtime, traders: [...traders].reverse() };
     expect(topGenomes(shuffled, 2)).toEqual([traders[0].genome, traders[1].genome]);
+  });
+
+  describe("patience gene (minHoldBars) force-hold", () => {
+    // Deterministic rise-then-fall series for momentum(3,12): the natural
+    // exit signal (fastEMA crosses back below slowEMA) fires at price index
+    // 22 (ts = 23 * 300_000 = 6_900_000) and stays flipped from there on —
+    // verified by directly simulating genomeWantsLong over this series.
+    const rise = Array.from({ length: 20 }, (_, i) => 10_000 + i * 100);
+    const fall = Array.from({ length: 20 }, (_, i) => rise[rise.length - 1] - (i + 1) * 300);
+    const RISE_THEN_FALL = [...rise, ...fall];
+    const NATURAL_EXIT_TS = 23 * 300_000; // price index 22, without patience
+
+    test("without patience (minHoldBars=0), the exit signal closes the position immediately", () => {
+      const result = runSeries(RISE_THEN_FALL, 0);
+      const closes = result.events.filter((e) => e.type === "trade_closed");
+      expect(closes.length).toBeGreaterThan(0);
+      expect(closes[0].ts).toBe(NATURAL_EXIT_TS);
+      expect((closes[0].payload as { liquidated: boolean }).liquidated).toBe(false);
+    });
+
+    test("with patience (minHoldBars=12), the exit signal at price index 22 is suppressed until the position has matured, closing later at the first post-patience bar", () => {
+      const result = runSeries(RISE_THEN_FALL, 12);
+      const closes = result.events.filter((e) => e.type === "trade_closed");
+      expect(closes.length).toBeGreaterThan(0);
+      // Opened at price index 11 (ts 3_600_000): heldBars reaches exactly
+      // 12 at price index 24 (ts 25*300_000), the first bar the patience
+      // gate no longer overrides the (still-false) natural exit signal.
+      expect(closes[0].ts).toBe(25 * 300_000);
+      expect(closes[0].ts).toBeGreaterThan(NATURAL_EXIT_TS); // proves suppression actually held it open longer
+      expect((closes[0].payload as { liquidated: boolean }).liquidated).toBe(false);
+    });
+
+    test("liquidation is NEVER suppressed by patience, even at maximum minHoldBars, mid-hold", () => {
+      // Same crash the plain (patience-less) test above already proves
+      // liquidates everyone — minHoldBars=24 (the max) forces wantLong=true
+      // on every bar of the crash (the position just opened, heldBars is
+      // far below 24), yet the engine's equity check still fires first.
+      const rising = Array.from({ length: 20 }, (_, i) => 10_000 + i * 50);
+      const crash = [3_000, 2_900, 2_800];
+      const result = runSeries([...rising, ...crash], 24);
+
+      expect(result.generationEnded).toBe(true);
+      expect(result.runtime.traders.every((t) => t.status === "dead")).toBe(true);
+      expect(result.events.some((e) => e.type === "trader_died")).toBe(true);
+      expect(
+        result.events.some((e) => e.type === "trade_closed" && (e.payload as { liquidated: boolean }).liquidated),
+      ).toBe(true);
+    });
   });
 });

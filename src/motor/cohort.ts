@@ -282,7 +282,12 @@ function stepOneTrader(
   if (close === undefined) return { trader: t, events: [] };
 
   const history = historyBySymbol.get(t.genome.symbol) ?? [];
-  const wantLong = decideWantLong(t, ts, history);
+  let wantLong = decideWantLong(t, ts, history);
+  // Patience gene: hold through the exit signal until minHoldBars bars have
+  // passed since entry. Liquidation is NEVER suppressed — stepDirectional's
+  // equity check runs regardless of wantLong — and forceClose (HR firing,
+  // rotation) never even looks at wantLong, so patience cannot block either.
+  if (t.step.inPosition && t.step.heldBars < t.genome.minHoldBars) wantLong = true;
 
   const cashBeforeMc = t.step.cashMc;
   const params = { leverage: t.genome.leverage, riskFraction: t.genome.riskFraction, feeBps: FEE_BPS };

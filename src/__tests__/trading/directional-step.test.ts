@@ -73,4 +73,52 @@ describe("stepDirectional", () => {
     expect(JSON.stringify(s0)).toBe(frozen);
     expect(MC_PER_CENT).toBe(1000);
   });
+
+  describe("heldBars lifecycle (patience gene support)", () => {
+    test("starts at 0 on init and stays 0 while flat", () => {
+      const s0 = initDirectionalStepState(200_000);
+      expect(s0.heldBars).toBe(0);
+      const stillFlat = stepDirectional(s0, 10_000, false, PARAMS);
+      expect(stillFlat.state.heldBars).toBe(0);
+    });
+
+    test("is 0 on the opening bar, then +1 each subsequent bar held", () => {
+      const s0 = initDirectionalStepState(200_000);
+      const opened = stepDirectional(s0, 10_000, true, PARAMS);
+      expect(opened.state.heldBars).toBe(0);
+      const held1 = stepDirectional(opened.state, 10_010, true, PARAMS);
+      expect(held1.state.heldBars).toBe(1);
+      const held2 = stepDirectional(held1.state, 10_020, true, PARAMS);
+      expect(held2.state.heldBars).toBe(2);
+    });
+
+    test("resets to 0 on a normal exit, then 0 again on the next re-entry", () => {
+      const s0 = initDirectionalStepState(200_000);
+      const opened = stepDirectional(s0, 10_000, true, PARAMS);
+      const held = stepDirectional(opened.state, 10_010, true, PARAMS);
+      expect(held.state.heldBars).toBe(1);
+      const closed = stepDirectional(held.state, 10_020, false, PARAMS);
+      expect(closed.state.heldBars).toBe(0);
+      const reopened = stepDirectional(closed.state, 10_030, true, PARAMS);
+      expect(reopened.state.heldBars).toBe(0);
+    });
+
+    test("resets to 0 on liquidation too", () => {
+      const s0 = initDirectionalStepState(200_000);
+      const opened = stepDirectional(s0, 10_000, true, PARAMS);
+      const dead = stepDirectional(opened.state, 6_600, true, PARAMS); // ~-33.4% wipes 3x equity
+      expect(dead.liquidated).toBe(true);
+      expect(dead.state.heldBars).toBe(0);
+    });
+
+    test("forceClose resets heldBars to 0 (ignores patience entirely — it never reads heldBars/wantLong)", () => {
+      const s0 = initDirectionalStepState(200_000);
+      const opened = stepDirectional(s0, 10_000, true, PARAMS);
+      const held = stepDirectional(opened.state, 10_010, true, PARAMS);
+      expect(held.state.heldBars).toBe(1);
+      const forced = forceClose(held.state, 10_010, PARAMS);
+      expect(forced.closed).toBe(true);
+      expect(forced.state.heldBars).toBe(0);
+    });
+  });
 });

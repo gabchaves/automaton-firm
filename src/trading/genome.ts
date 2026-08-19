@@ -25,6 +25,11 @@ export interface Genome {
   combinator: "all" | "majority" | "any";
   leverage: number; // integer 1..3
   riskFraction: number; // 0.5..1.0
+  // Patience gene: bars a position must stay open before an exit signal is
+  // honored (0 = today's behavior, exit fires immediately). Liquidation and
+  // forceClose (HR firing/rotation) always ignore this — see
+  // directional-step.ts/cohort.ts's stepOneTrader.
+  minHoldBars: number; // integer 0..24
 }
 
 export const GENOME_BOUNDS = {
@@ -34,6 +39,7 @@ export const GENOME_BOUNDS = {
   regimeFilter: { smaBars: [48, 288] },
   leverage: [1, 3],
   riskFraction: [0.5, 1],
+  minHoldBars: [0, 24],
   genesMin: 1,
   genesMax: 3,
 } as const;
@@ -78,6 +84,9 @@ export const GenomeSchema = z
     combinator: z.enum(COMBINATORS),
     leverage: z.number().int().min(1).max(3),
     riskFraction: z.number().min(0.5).max(1),
+    // .default(0) so LEGACY persisted genomes (no minHoldBars field at all)
+    // still parse clean, as today's behavior (no patience).
+    minHoldBars: z.number().int().min(0).max(24).default(0),
   })
   .refine((g) => g.genes.some((gene) => gene.family !== "regimeFilter"), {
     message: "genome needs at least one signal gene",
@@ -129,6 +138,7 @@ export function randomGenome(seed: number): Genome {
     combinator: COMBINATORS[randInt(rng, 0, 2)],
     leverage: randInt(rng, 1, 3),
     riskFraction: Math.round(randUniform(rng, 0.5, 1) * 100) / 100,
+    minHoldBars: randInt(rng, 0, 24),
   };
 }
 
@@ -176,12 +186,14 @@ export function mutateGenome(genome: Genome, seed: number): Genome {
     } else if (roll < 0.75) {
       const others = COMBINATORS.filter((c) => c !== next.combinator);
       next = { ...next, combinator: others[randInt(rng, 0, others.length - 1)] };
-    } else if (roll < 0.85) {
+    } else if (roll < 0.83) {
       const delta = rng() < 0.5 ? -1 : 1;
       next = { ...next, leverage: clamp(next.leverage + delta, 1, 3) };
-    } else if (roll < 0.95) {
+    } else if (roll < 0.91) {
       const delta = rng() < 0.5 ? -0.1 : 0.1;
       next = { ...next, riskFraction: Math.round(clamp(next.riskFraction + delta, 0.5, 1) * 100) / 100 };
+    } else if (roll < 0.97) {
+      next = { ...next, minHoldBars: tweakInt(rng, next.minHoldBars, 0, 24) };
     } else {
       const others = GENOME_SYMBOLS.filter((s) => s !== next.symbol);
       next = { ...next, symbol: others[randInt(rng, 0, others.length - 1)] };

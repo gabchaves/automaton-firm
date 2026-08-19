@@ -70,6 +70,28 @@ function createMkId(seedTime: number, scope: number): () => string {
   };
 }
 
+/** Legacy state_json predates the patience gene: heldBars is missing on
+ * disk, not merely 0 — default it explicitly rather than let it parse as
+ * `undefined` (which would silently defeat the `heldBars < minHoldBars`
+ * comparison in cohort.ts's stepOneTrader). */
+function parseStepState(stateJson: string): DirectionalStepState {
+  const p = JSON.parse(stateJson) as Partial<DirectionalStepState>;
+  // Rebuild in the canonical field order of initDirectionalStepState. A bare
+  // spread would put a defaulted `heldBars` first, and the persisted
+  // state_json string would then differ byte-for-byte from a never-reloaded
+  // in-memory state — breaking the catch-up equivalence guarantee even though
+  // the VALUES match.
+  return {
+    cashMc: p.cashMc ?? 0,
+    inPosition: p.inPosition ?? false,
+    qty: p.qty ?? 0,
+    entryPriceCents: p.entryPriceCents ?? 0,
+    cycleStartCashMc: p.cycleStartCashMc ?? 0,
+    heldBars: p.heldBars ?? 0,
+    died: p.died ?? false,
+  };
+}
+
 export function loadRuntime(db: MotorDb, cohort: Cohort): CohortRuntime | null {
   const generation = db.getLiveGeneration(cohort);
   if (!generation) return null;
@@ -85,7 +107,7 @@ export function loadRuntime(db: MotorDb, cohort: Cohort): CohortRuntime | null {
       cohort: row.cohort,
       genome: GenomeSchema.parse(JSON.parse(row.genomeJson)),
       deciderSeed: row.deciderSeed,
-      step: JSON.parse(row.stateJson) as DirectionalStepState,
+      step: parseStepState(row.stateJson),
       status: row.status,
       bornAt: row.bornAt,
       diedAt: row.diedAt,

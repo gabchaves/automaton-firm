@@ -33,7 +33,7 @@ export interface PalcoSnapshot {
     status: string; bookMc: number; realizedPnlMc: number; tradesCount: number;
     symbol: string; leverage: number; genes: string; combinator: string;
     genome: {
-      symbol: string; leverage: number; riskFraction: number; combinator: string;
+      symbol: string; leverage: number; riskFraction: number; combinator: string; minHoldBars: number;
       genes: Array<{ family: string; params: Record<string, number> }>; // family key removed from params
     };
     achievements: string[];
@@ -81,6 +81,7 @@ interface GenomeShape {
   combinator: string;
   leverage: number;
   riskFraction: number;
+  minHoldBars?: number; // absent on genomes persisted before the patience gene
 }
 
 /** Params for a gene, with the `family` discriminator key removed. */
@@ -100,6 +101,7 @@ function structuredGenome(genome: GenomeShape): PalcoSnapshot["leaderboard"][num
     leverage: genome.leverage,
     riskFraction: genome.riskFraction,
     combinator: genome.combinator,
+    minHoldBars: genome.minHoldBars ?? 0,
     genes: genome.genes.map((gene) => ({ family: gene.family, params: geneParams(gene) })),
   };
 }

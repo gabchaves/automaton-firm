@@ -200,6 +200,7 @@ describe("buildSnapshot: leaderboard genome struct", () => {
       leverage: 3,
       riskFraction: 0.6,
       combinator: "all",
+      minHoldBars: 0, // absent from this legacy-shaped raw JSON — defaults to 0
       genes: [
         { family: "momentum", params: { fastBars: 5, slowBars: 40 } },
         { family: "breakout", params: { channelBars: 20 } },
@@ -208,6 +209,21 @@ describe("buildSnapshot: leaderboard genome struct", () => {
     // Back-compat string fields stay untouched.
     expect(ana?.genes).toBe("momentum + breakout");
     expect(ana?.combinator).toBe("all");
+  });
+
+  test("genome.minHoldBars (patience gene) passes through when present, top-level like leverage", () => {
+    const d = fresh();
+    d.insertGeneration(generationRow({ id: "g1", cohort: "evolved", genNumber: 1, startedAt: 0, endedAt: null }));
+    const rawGenomeJson = JSON.stringify({
+      symbol: "BTCUSDT", leverage: 2, riskFraction: 0.8, combinator: "any", minHoldBars: 6,
+      genes: [{ family: "breakout", channelBars: 30 }],
+    });
+    d.insertTrader(traderRow({ id: "e1", generationId: "g1", cohort: "evolved", name: "Ana Faria", genomeJson: rawGenomeJson }));
+
+    const snap = buildSnapshot(d.raw, 0);
+    const ana = snap.leaderboard.find((r) => r.name === "Ana Faria");
+
+    expect(ana?.genome.minHoldBars).toBe(6);
   });
 });
 
