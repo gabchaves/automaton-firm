@@ -23,6 +23,10 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     setupFiles: ["./src/setupTests.ts"],
-    include: ["src/__tests__/**/*.test.tsx"],
+    // v3.2 plan added muralVoice.ts's pure-logic test file with no JSX
+    // (.test.ts, not .test.tsx) — widen the glob so it (and any future
+    // non-component test file) actually gets picked up instead of
+    // silently skipped.
+    include: ["src/__tests__/**/*.test.{ts,tsx}"],
   },
 });

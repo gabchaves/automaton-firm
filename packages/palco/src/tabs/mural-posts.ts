@@ -8,9 +8,16 @@
  * escaped) — the only exception is `fallbackHtml`, a last-resort escape
  * hatch for event types this module doesn't model, which reuses the
  * server's already-escaped `html` field (see palco-format.ts).
+ *
+ * v3.2 plan ("mural humanizado"): body copy for every modeled event type is
+ * picked deterministically from muralVoice.ts's joke pools, seeded from
+ * `mulberry32(item.id)` — same event, same joke, forever. Headlines/emojis
+ * are untouched by that pass; they're still decided right here.
  */
 import type { PalcoSnapshot } from "../types";
 import { usd } from "../format";
+import { mulberry32 } from "../rng";
+import { pickBody, signedUsd } from "../muralVoice";
 
 type FeedItem = PalcoSnapshot["feed"][number];
 
@@ -31,14 +38,17 @@ export interface MuralPost {
   includeSad: boolean;
   fallbackHtml?: string;
   // Set only for an ungrouped (i.e. "big") trade_closed post — small trades
-  // never reach buildEventPost, they're folded into buildGroupedTradePost
-  // instead. Drives the retro post box's green/red left-border accent.
+  // never reach buildEventPost, they're folded into the per-symbol "resumo
+  // da mesa" group instead. Drives the retro post box's green/red left-
+  // border accent.
   pnlClass?: "pos" | "neg";
 }
 
-// Trades grouped into one "Resumo da mesa" post when |pnl| is below this —
-// $0.05, per the plan.
-const SMALL_TRADE_THRESHOLD_MC = 5_000;
+// Individual trade_closed posts only survive above this bar — $1.00 on the
+// $100 paper-bankroll scale (v3.2 plan's "less frequent" pass, raised from
+// the v3 plan's $0.05). Everything smaller folds into one grouped "resumo
+// da mesa {symbol}" post per symbol per render instead of flooding the wall.
+const SMALL_TRADE_THRESHOLD_MC = 100_000;
 
 function num(payload: Record<string, unknown>, key: string, fallback = 0): number {
   const value = payload[key];
@@ -50,47 +60,68 @@ function str(payload: Record<string, unknown>, key: string, fallback = ""): stri
   return typeof value === "string" ? value : fallback;
 }
 
-function cohortLabel(cohort: string): string {
-  return cohort === "evolved" ? "firma" : "controle";
-}
-
 function symbolOf(item: FeedItem): string {
   return str(item.payload, "symbol", "?");
 }
 
-/** trade_opened has no pnl concept (it's the entry, not the exit) so it
- * always groups; trade_closed groups only below the small-trade threshold —
- * a big win or a big loss stays its own spotlight post. */
 function isSmallTrade(item: FeedItem): boolean {
-  if (item.type === "trade_opened") return true;
-  if (item.type === "trade_closed") return Math.abs(num(item.payload, "realizedPnlMc")) < SMALL_TRADE_THRESHOLD_MC;
-  return false;
+  return Math.abs(num(item.payload, "realizedPnlMc")) < SMALL_TRADE_THRESHOLD_MC;
 }
 
-function buildGroupedTradePost(items: FeedItem[]): MuralPost {
-  const symbol = symbolOf(items[0]);
-  const count = items.length;
-  const netPnlMc = items.reduce(
-    (sum, item) => (item.type === "trade_closed" ? sum + num(item.payload, "realizedPnlMc") : sum),
-    0,
-  );
-  const firstId = items[0].id;
-  const lastId = items[items.length - 1].id;
+/** hr_review posts only render when the cycle actually DID something —
+ * a review with zero firings/promotions is noise, per the v3.2 plan. */
+function hasHrActions(payload: Record<string, unknown>): boolean {
+  return num(payload, "fired") + num(payload, "promoted") > 0;
+}
 
-  return {
-    key: `group-${firstId}-${lastId}`,
-    ts: items[0].ts, // feed is newest-first, so items[0] is the most recent member
-    memberIds: items.map((item) => item.id),
-    author: { name: symbol, cargo: `Trader · Mesa ${symbol}` },
-    headline: "🔁 Resumo da mesa",
-    body: `A mesa de ${symbol} girou ${count} ${count === 1 ? "trade pequeno" : "trades pequenos"}, líquido ${usd(netPnlMc)}.`,
-    reactionSeed: firstId,
-    includeSad: false,
+function groupedTradeBody(count: number, netPnlMc: number): string {
+  const countLabel = count === 1 ? "1 operação miúda" : `${count} operações miúdas`;
+  const saldo = signedUsd(netPnlMc);
+  return netPnlMc >= 0
+    ? `${countLabel}, saldo ${saldo}. Formiguinha também é lucro.`
+    : `${countLabel}, saldo ${saldo}. A corretora agradece as taxas.`;
+}
+
+/** Mutable accumulator for one symbol's small-trade "resumo" post: the
+ * `post` object is pushed into the result array ONCE, then mutated in
+ * place as more small trades of that symbol turn up anywhere else in the
+ * feed (not just consecutively) — "one post per symbol per render". */
+interface GroupAccumulator {
+  post: MuralPost;
+  count: number;
+  netPnlMc: number;
+}
+
+function startGroupedTrade(item: FeedItem, symbol: string): GroupAccumulator {
+  const netPnlMc = num(item.payload, "realizedPnlMc");
+  const acc: GroupAccumulator = {
+    count: 1,
+    netPnlMc,
+    post: {
+      key: `group-${symbol}-${item.id}`,
+      ts: item.ts, // feed is newest-first, so the FIRST small trade of this symbol encountered is the most recent
+      memberIds: [item.id],
+      author: { name: symbol, cargo: `Trader · Mesa ${symbol}` },
+      headline: `🔁 Resumo da mesa ${symbol}`,
+      body: "",
+      reactionSeed: item.id,
+      includeSad: false,
+    },
   };
+  acc.post.body = groupedTradeBody(acc.count, acc.netPnlMc);
+  return acc;
+}
+
+function addToGroupedTrade(acc: GroupAccumulator, item: FeedItem): void {
+  acc.count += 1;
+  acc.netPnlMc += num(item.payload, "realizedPnlMc");
+  acc.post.memberIds.push(item.id);
+  acc.post.body = groupedTradeBody(acc.count, acc.netPnlMc);
 }
 
 function buildEventPost(item: FeedItem): MuralPost {
   const p = item.payload;
+  const rng = mulberry32(item.id);
   const base = { key: `event-${item.id}`, ts: item.ts, memberIds: [item.id], reactionSeed: item.id };
 
   switch (item.type) {
@@ -98,14 +129,11 @@ function buildEventPost(item: FeedItem): MuralPost {
       const pnl = num(p, "realizedPnlMc");
       const symbol = symbolOf(item);
       const win = pnl > 0;
-      const liquidatedNote = p.liquidated === true ? " A posição foi liquidada." : "";
       return {
         ...base,
         author: { name: symbol, cargo: `Trader · Mesa ${symbol}` },
         headline: win ? "📈 Lucro em destaque" : "📉 Perda no book",
-        body: win
-          ? `Fechamos ${symbol} com lucro de ${usd(pnl)}. 🎉`
-          : `Fechamos ${symbol} com perda de ${usd(Math.abs(pnl))}.${liquidatedNote}`,
+        body: pickBody("trade_closed", p, rng),
         includeSad: false,
         pnlClass: win ? "pos" : "neg",
       };
@@ -116,7 +144,7 @@ function buildEventPost(item: FeedItem): MuralPost {
         ...base,
         author: { name, cargo: "Trader" },
         headline: "🤝 Nova contratação",
-        body: `Demos as boas-vindas a ${name} na mesa (slot ${num(p, "slot")}), com stake inicial de ${usd(num(p, "stakeMc"))}.`,
+        body: pickBody("trader_hired", p, rng),
         includeSad: false,
       };
     }
@@ -126,19 +154,18 @@ function buildEventPost(item: FeedItem): MuralPost {
         ...base,
         author: { name: "RH", cargo: "RH" },
         headline: "📦 Desligamento",
-        body: `Hoje encerramos o ciclo de ${name} na firma. Devolveu ${usd(num(p, "returnedMc"))} ao caixa. Desejamos sorte na próxima geração.`,
+        body: pickBody("trader_fired", p, rng),
         quoted: str(p, "reason"),
         includeSad: true,
       };
     }
     case "trader_died": {
       const name = str(p, "name", "Trader");
-      const ageH = (num(p, "ageMs") / 3_600_000).toFixed(1);
       return {
         ...base,
         author: { name, cargo: "Trader" },
         headline: "🕯️ Nota de falecimento (do book)",
-        body: `${name} chegou ao fim depois de ${ageH}h de operação, com pico de book em ${usd(num(p, "bookPeakMc"))}.`,
+        body: pickBody("trader_died", p, rng),
         includeSad: true,
       };
     }
@@ -148,7 +175,7 @@ function buildEventPost(item: FeedItem): MuralPost {
         ...base,
         author: { name, cargo: "Trader" },
         headline: "🏆 Promoção",
-        body: `${name} foi promovido(a) para ${str(p, "title")}.`,
+        body: pickBody("trader_promoted", p, rng),
         includeSad: false,
       };
     }
@@ -158,7 +185,7 @@ function buildEventPost(item: FeedItem): MuralPost {
         ...base,
         author: { name, cargo: "Trader" },
         headline: "✨ Conquista desbloqueada",
-        body: `${name} desbloqueou uma conquista: "${str(p, "label")}".`,
+        body: pickBody("achievement", p, rng),
         includeSad: false,
       };
     }
@@ -167,7 +194,7 @@ function buildEventPost(item: FeedItem): MuralPost {
         ...base,
         author: { name: "A Firma", cargo: "A Firma" },
         headline: "🔔 Recorde da firma",
-        body: `Novo recorde: ${usd(num(p, "peakEquityMc"))} (${cohortLabel(str(p, "cohort"))}, geração ${num(p, "genNumber")}) — recorde anterior era ${usd(num(p, "previousRecordMc"))}.`,
+        body: pickBody("record_broken", p, rng),
         includeSad: false,
       };
     }
@@ -176,17 +203,16 @@ function buildEventPost(item: FeedItem): MuralPost {
         ...base,
         author: { name: "A Firma", cargo: "A Firma" },
         headline: "🌱 Comunicado da diretoria",
-        body: `Geração ${num(p, "genNumber")} (${cohortLabel(str(p, "cohort"))}) começou. ${str(p, "seedNote")}`,
+        body: pickBody("gen_started", p, rng),
         includeSad: false,
       };
     }
     case "gen_ended": {
-      const recordNote = p.isNewRecord === true ? " 🔔 Novo recorde!" : "";
       return {
         ...base,
         author: { name: "A Firma", cargo: "A Firma" },
         headline: "⚰️ Comunicado da diretoria",
-        body: `Geração ${num(p, "genNumber")} (${cohortLabel(str(p, "cohort"))}) encerrou depois de ${num(p, "daysLived")} dias, com pico de ${usd(num(p, "peakEquityMc"))}.${recordNote}`,
+        body: pickBody("gen_ended", p, rng),
         includeSad: false,
       };
     }
@@ -195,7 +221,7 @@ function buildEventPost(item: FeedItem): MuralPost {
         ...base,
         author: { name: "RH", cargo: "RH" },
         headline: "🧾 Ciclo de avaliação",
-        body: `Ciclo de avaliação: ${num(p, "reviewed")} avaliados, ${num(p, "fired")} demitidos, ${num(p, "promoted")} promovidos, ${num(p, "held")} mantidos.`,
+        body: pickBody("hr_review", p, rng),
         includeSad: false,
       };
     }
@@ -216,25 +242,41 @@ function buildEventPost(item: FeedItem): MuralPost {
   }
 }
 
-/** Groups consecutive small trades (same symbol) into one post, and maps
- * every other feed item 1:1 to its own post. Feed is newest-first. */
+/**
+ * Turns the raw feed into Mural posts (v3.2 plan's "less frequent" pass):
+ * - `trade_opened` never becomes a post — it stays visible in the Pregão
+ *   trades list and the ticker-tape, but the Mural doesn't need an "opened
+ *   a position" scrap for every trade.
+ * - `trade_closed` posts individually only when |pnl| >= $1; smaller ones
+ *   fold into one "resumo da mesa {symbol}" post per symbol, aggregated
+ *   across the WHOLE rendered feed (not just consecutive entries).
+ * - `hr_review` posts only when the cycle actually fired or promoted
+ *   someone; a quiet review (0 actions) is skipped entirely.
+ * - Every other event type maps 1:1 to its own post, same as before.
+ */
 export function buildMuralPosts(feed: FeedItem[]): MuralPost[] {
   const posts: MuralPost[] = [];
-  let i = 0;
-  while (i < feed.length) {
-    const item = feed[i];
-    if (isSmallTrade(item)) {
+  const groupsBySymbol = new Map<string, GroupAccumulator>();
+
+  for (const item of feed) {
+    if (item.type === "trade_opened") continue;
+    if (item.type === "hr_review" && !hasHrActions(item.payload)) continue;
+
+    if (item.type === "trade_closed" && isSmallTrade(item)) {
       const symbol = symbolOf(item);
-      const group: FeedItem[] = [];
-      while (i < feed.length && isSmallTrade(feed[i]) && symbolOf(feed[i]) === symbol) {
-        group.push(feed[i]);
-        i += 1;
+      const existing = groupsBySymbol.get(symbol);
+      if (existing) {
+        addToGroupedTrade(existing, item);
+      } else {
+        const acc = startGroupedTrade(item, symbol);
+        groupsBySymbol.set(symbol, acc);
+        posts.push(acc.post);
       }
-      posts.push(buildGroupedTradePost(group));
-    } else {
-      posts.push(buildEventPost(item));
-      i += 1;
+      continue;
     }
+
+    posts.push(buildEventPost(item));
   }
+
   return posts;
 }

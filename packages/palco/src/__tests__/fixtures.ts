@@ -5,11 +5,17 @@ import type { PalcoSnapshot } from "../types";
  *
  * The `feed` array is ordered newest-first (id descending), matching the
  * real API. It's deliberately built to exercise MuralTab's post-building
- * rules: a big-win trade (its own spotlight post), a consecutive pair of
- * small same-symbol trades (id 42/41, ETHUSDT — collapse into one grouped
- * "Resumo da mesa" post), one of every other headline-mapped event type,
- * and one unmapped type (catch_up) to exercise the last-resort html
- * fallback.
+ * rules (v3.2 "less frequent" pass, $1 individual-trade threshold): a
+ * big-win BTCUSDT trade well above $1 (its own spotlight post), a
+ * trade_opened event (id 41 — dropped entirely from the Mural, stays only
+ * in Pregão/the ticker), and TWO small ETHUSDT trade_closed events that are
+ * NOT consecutive in feed order (id 42 near the top, id 39 at the bottom,
+ * with unrelated events — including id 41's dropped trade_opened — sitting
+ * between them) — they still collapse into ONE grouped "resumo da mesa
+ * ETHUSDT" post, proving the grouping is per-symbol across the whole
+ * render, not just consecutive runs. Also one of every other
+ * headline-mapped event type, and one unmapped type (catch_up) to exercise
+ * the last-resort html fallback.
  *
  * `org.employees`' seedNote values are deliberately varied per employee
  * (not all sharing one generation-level string, unlike the real Motor) so
@@ -111,8 +117,11 @@ export const fixtureSnapshot: PalcoSnapshot = {
       id: 50,
       ts: 1_700_000_500_000,
       type: "trade_closed",
-      html: "fechou BTCUSDT · P&amp;L $0.60",
-      payload: { symbol: "BTCUSDT", priceCents: 6_000_000, realizedPnlMc: 60_000, feeMc: 100, liquidated: false },
+      html: "fechou BTCUSDT · P&amp;L $1.50",
+      // $1.50 — above the v3.2 plan's $1 individual-post threshold, so this
+      // stays its own spotlight "big win" post instead of folding into a
+      // grouped resumo.
+      payload: { symbol: "BTCUSDT", priceCents: 6_000_000, realizedPnlMc: 150_000, feeMc: 100, liquidated: false },
     },
     {
       id: 49,
@@ -183,6 +192,16 @@ export const fixtureSnapshot: PalcoSnapshot = {
       type: "hr_review",
       html: "🧾 RH: 5 avaliados · 1 demitidos · 1 promovidos · 3 mantidos · benchmark 20c",
       payload: { reviewed: 5, fired: 1, promoted: 1, held: 3, benchmarkCents: 20 },
+    },
+    {
+      id: 39,
+      ts: 1_699_999_950_000,
+      type: "trade_closed",
+      html: "fechou ETHUSDT · P&amp;L $-0.01",
+      // Small ETHUSDT loss, NOT adjacent to id 42's small ETHUSDT win (ids
+      // 48-41 sit between them) — exercises whole-feed per-symbol grouping
+      // rather than only-consecutive grouping.
+      payload: { symbol: "ETHUSDT", priceCents: 295_000, realizedPnlMc: -1_000, feeMc: 10, liquidated: false },
     },
   ],
   org: {

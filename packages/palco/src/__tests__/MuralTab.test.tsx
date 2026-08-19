@@ -3,6 +3,7 @@ import { render, screen, cleanup } from "@testing-library/react";
 import { MuralTab } from "../tabs/MuralTab";
 import { fixtureSnapshot } from "./fixtures";
 import { absoluteTimestamp } from "../format";
+import type { PalcoSnapshot } from "../types";
 
 describe("MuralTab", () => {
   it("shows a placeholder when there is no snapshot yet", () => {
@@ -12,8 +13,12 @@ describe("MuralTab", () => {
 
   it("renders the scraps(N) tab header and the decorative breadcrumb", () => {
     render(<MuralTab snapshot={fixtureSnapshot} />);
-    // 9 individually-mapped events + the ETHUSDT small-trade pair (id 42+41)
-    // collapsed into one grouped "Resumo da mesa" post = 10 posts total.
+    // v3.2 "less frequent" pass: 9 individually-mapped events (the big-win
+    // BTCUSDT trade, trader_fired, trader_hired, achievement, trader_died,
+    // record_broken, gen_started, catch_up, hr_review-with-actions) + the
+    // ETHUSDT small-trade group (ids 42 and 39, non-consecutive, collapsed
+    // into one "resumo da mesa" post) = 10 posts total. id 41's
+    // trade_opened is dropped entirely, not counted anywhere here.
     expect(screen.getByText("scraps (10)")).toBeInTheDocument();
     expect(screen.getByText("perfil")).toBeInTheDocument();
     expect(screen.getByText("scraps")).toBeInTheDocument();
@@ -39,10 +44,14 @@ describe("MuralTab", () => {
     expect(screen.getByText(/reações são decorativas/i)).toBeInTheDocument();
   });
 
-  it("builds a headline post from the trade_closed payload for a big win", () => {
+  it("builds a headline post with a humanized body for a big win, from the trade_closed payload", () => {
     render(<MuralTab snapshot={fixtureSnapshot} />);
     expect(screen.getByText("📈 Lucro em destaque")).toBeInTheDocument();
-    expect(screen.getByText(/Fechamos BTCUSDT com lucro de \$0\.60/)).toBeInTheDocument();
+    // $1.50 (fixture id 50, above the $1 individual-post threshold) —
+    // mulberry32(50) deterministically picks this exact pool line.
+    expect(
+      screen.getByText("$1.50 no bolso. Não foi sorte — foi o genoma. (Foi um pouco de sorte.)"),
+    ).toBeInTheDocument();
   });
 
   it("renders the scrap's author as a link-styled name plus cargo, and an absolute Orkut timestamp", () => {
@@ -56,31 +65,104 @@ describe("MuralTab", () => {
     expect(screen.getByText(absoluteTimestamp(1_700_000_500_000))).toBeInTheDocument();
   });
 
-  it("renders a trader_fired post authored by RH with the quoted reason", () => {
+  it("renders a trader_fired post authored by RH, with a humanized body and the quoted reason", () => {
     render(<MuralTab snapshot={fixtureSnapshot} />);
     expect(screen.getByText("📦 Desligamento")).toBeInTheDocument();
-    expect(screen.getByText(/encerramos o ciclo de Caue Reis/)).toBeInTheDocument();
+    // mulberry32(49) deterministically picks this exact pool line.
+    expect(
+      screen.getByText(
+        "Comunicado do RH: encerramos o ciclo de Caue Reis. Devolveu $0.80 ao caixa. A decisão foi baseada em evidência — como sempre.",
+      ),
+    ).toBeInTheDocument();
     expect(screen.getByText("underperformance sustentada")).toBeInTheDocument();
     // RH is the post's author, not the fired employee.
     expect(screen.getAllByText("RH").length).toBeGreaterThan(0);
   });
 
-  it("collapses consecutive small same-symbol trades into one grouped post", () => {
+  it("collapses small same-symbol trades into one resumo post, even when they aren't consecutive in the feed", () => {
     render(<MuralTab snapshot={fixtureSnapshot} />);
-    // Fixture has one trade_closed ($0.02) + one trade_opened on ETHUSDT,
-    // consecutive in feed order — both below the $0.05 grouping threshold.
-    expect(screen.getByText("🔁 Resumo da mesa")).toBeInTheDocument();
-    expect(screen.getByText(/mesa de ETHUSDT girou 2 trades pequenos/)).toBeInTheDocument();
-    // Grouped into exactly one <li class="orkut-scrap">, not two.
+    // Fixture has two small ETHUSDT trade_closed events (id 42: +$0.02, id
+    // 39: -$0.01 — net +$0.01, count 2), separated by several unrelated
+    // events (including id 41's dropped trade_opened). They still collapse
+    // into exactly ONE "resumo da mesa ETHUSDT" post, per symbol per render.
+    expect(screen.getByText("🔁 Resumo da mesa ETHUSDT")).toBeInTheDocument();
+    expect(
+      screen.getByText("2 operações miúdas, saldo $0.01. Formiguinha também é lucro."),
+    ).toBeInTheDocument();
     const resumoScraps = document.querySelectorAll("li.orkut-scrap");
     const matching = Array.from(resumoScraps).filter((li) => li.textContent?.includes("Resumo da mesa"));
     expect(matching).toHaveLength(1);
+  });
+
+  it("never renders a post for trade_opened — it's dropped entirely from the Mural", () => {
+    render(<MuralTab snapshot={fixtureSnapshot} />);
+    // id 41 is a trade_opened ETHUSDT event; its own wording ("abriu",
+    // "notional") must not appear anywhere in the Mural (it still shows up
+    // in Pregão's trade feed and the ticker-tape, just not here).
+    expect(screen.queryByText(/abriu ETHUSDT/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/notional/)).not.toBeInTheDocument();
+  });
+
+  it("shows the net-negative resumo variant when a symbol's small trades net a loss", () => {
+    const losingGroupSnapshot: PalcoSnapshot = {
+      ...fixtureSnapshot,
+      feed: [
+        {
+          id: 61,
+          ts: 1_700_000_600_000,
+          type: "trade_closed",
+          html: "",
+          payload: { symbol: "SOLUSDT", realizedPnlMc: -3_000, feeMc: 10, liquidated: false },
+        },
+        {
+          id: 60,
+          ts: 1_700_000_590_000,
+          type: "trade_closed",
+          html: "",
+          payload: { symbol: "SOLUSDT", realizedPnlMc: -1_000, feeMc: 10, liquidated: false },
+        },
+      ],
+    };
+    render(<MuralTab snapshot={losingGroupSnapshot} />);
+    expect(screen.getByText("🔁 Resumo da mesa SOLUSDT")).toBeInTheDocument();
+    expect(screen.getByText("2 operações miúdas, saldo -$0.04. A corretora agradece as taxas.")).toBeInTheDocument();
+  });
+
+  it("skips a quiet hr_review post (zero firings and zero promotions)", () => {
+    const quietReviewSnapshot: PalcoSnapshot = {
+      ...fixtureSnapshot,
+      feed: [
+        {
+          id: 62,
+          ts: 1_700_000_700_000,
+          type: "hr_review",
+          html: "🧾 RH: 4 avaliados · 0 demitidos · 0 promovidos · 4 mantidos · benchmark 10c",
+          payload: { reviewed: 4, fired: 0, promoted: 0, held: 4, benchmarkCents: 10 },
+        },
+      ],
+    };
+    render(<MuralTab snapshot={quietReviewSnapshot} />);
+    expect(screen.getByText("Sem eventos ainda.")).toBeInTheDocument();
   });
 
   it("falls back to the pre-escaped html for an event type it doesn't model as a post", () => {
     render(<MuralTab snapshot={fixtureSnapshot} />);
     // "catch_up" has no headline mapping in mural-posts.ts.
     expect(screen.getByText("⏪ catch-up de 12 barras")).toBeInTheDocument();
+  });
+
+  it("renders the same post body deterministically across two separate renders (same feed, same joke)", () => {
+    const { unmount } = render(<MuralTab snapshot={fixtureSnapshot} />);
+    const firstRun = screen.getByText("📈 Lucro em destaque").closest("li.orkut-scrap")?.textContent;
+    unmount();
+    cleanup();
+
+    render(<MuralTab snapshot={fixtureSnapshot} />);
+    const secondRun = screen.getByText("📈 Lucro em destaque").closest("li.orkut-scrap")?.textContent;
+
+    expect(firstRun).toBeTruthy();
+    expect(firstRun).toBe(secondRun);
+    expect(firstRun).toContain("$1.50 no bolso. Não foi sorte — foi o genoma. (Foi um pouco de sorte.)");
   });
 
   it("renders the reactions footer as decorative Orkut-style phrases, deterministically across two separate renders", () => {
