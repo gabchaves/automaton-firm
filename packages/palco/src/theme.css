@@ -694,7 +694,7 @@ li.orkut-scrap:last-child {
   }
 }
 
-/* RH card — the one warm accent tint: --cream background, --black text,
+/* RH card — its own warm accent tint: --cream background, --black text,
  * per the plan's "colored section tints... use sparingly" pattern. v4.3:
  * gains the --blue top accent bar + icon that used to live on the graph's
  * separate RH node (OrgGraph.tsx, removed) — RH now has exactly ONE
@@ -708,14 +708,17 @@ li.orkut-scrap:last-child {
   color: var(--black);
 }
 
-/* CEO card — same cream panel as .rh-card, but --green top accent instead
- * of --blue, so the two leadership cards read as siblings (same shape)
- * with distinct roles (different accent). The seat isn't vacant: it's
- * held by whoever's winning right now (see EmpresaTab.tsx's pickCeo) —
- * .ceo-name carries that name with the same weight .section-title gives
- * every other headline on the page. */
+/* CEO card — its own tint, not RH's cream: reusing --cream for both made
+ * the paired leadership row read as two identical beige boxes (user
+ * feedback). --pink was reserved as theme.css's "rare tint" and had no
+ * other home — a natural fit for the one card on the page meant to feel
+ * like a spotlight, not a filing cabinet. Same shape as .rh-card (border/
+ * padding/black text), --green top accent instead of --blue. The seat
+ * isn't vacant: it's held by whoever's winning right now (see
+ * EmpresaTab.tsx's pickCeo) — .ceo-name carries that name with the same
+ * weight .section-title gives every other headline on the page. */
 .ceo-card {
-  background: var(--cream);
+  background: var(--pink);
   border: var(--border-fade);
   border-top: 3px solid var(--green);
   padding: 18px 20px;
