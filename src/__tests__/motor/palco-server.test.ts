@@ -128,6 +128,86 @@ describe("startPalcoServer", () => {
     }
   });
 
+  test("/api/feed returns an older page, newest-first, bounded by limit", async () => {
+    const dbPath = freshDbPath();
+    for (let i = 0; i < 45; i++) {
+      db!.insertEvent({
+        ts: 1000 + i, type: "catch_up", traderId: null, generationId: null,
+        payloadJson: JSON.stringify({ fromTs: 0, toTs: 1, bars: i }),
+      });
+    }
+    // ids 1..45 (bars 0..44), same AUTOINCREMENT reasoning as palco-data.test.ts.
+
+    const server = (await startPalcoServer({
+      dbPath, port: 0, distDir: join(dir!, "no-such-dist"),
+    })) as PalcoServerHandle;
+
+    try {
+      const res = await get(server.port, "/api/feed?before=41&limit=5");
+      expect(res.status).toBe(200);
+      expect(res.headers["cache-control"]).toBe("no-store");
+      const body = JSON.parse(res.body) as { feed: { id: number }[] };
+      expect(body.feed.map((e) => e.id)).toEqual([40, 39, 38, 37, 36]);
+    } finally {
+      await server.close();
+    }
+  });
+
+  test("/api/feed defaults to a limit of 20 and caps an oversized limit at 100", async () => {
+    const dbPath = freshDbPath();
+    for (let i = 0; i < 150; i++) {
+      db!.insertEvent({
+        ts: 1000 + i, type: "catch_up", traderId: null, generationId: null,
+        payloadJson: JSON.stringify({ fromTs: 0, toTs: 1, bars: i }),
+      });
+    }
+    // ids 1..150 -> beforeId 151 sees every one of them as "older".
+
+    const server = (await startPalcoServer({
+      dbPath, port: 0, distDir: join(dir!, "no-such-dist"),
+    })) as PalcoServerHandle;
+
+    try {
+      const defaultRes = await get(server.port, "/api/feed?before=151");
+      const defaultBody = JSON.parse(defaultRes.body) as { feed: unknown[] };
+      expect(defaultBody.feed.length).toBe(20);
+
+      const cappedRes = await get(server.port, "/api/feed?before=151&limit=500");
+      const cappedBody = JSON.parse(cappedRes.body) as { feed: unknown[] };
+      expect(cappedBody.feed.length).toBe(100);
+    } finally {
+      await server.close();
+    }
+  });
+
+  test("/api/feed responds 400 on a missing or non-numeric 'before', or a non-numeric 'limit'", async () => {
+    const dbPath = freshDbPath();
+    db!.insertEvent({
+      ts: 0, type: "catch_up", traderId: null, generationId: null,
+      payloadJson: JSON.stringify({ fromTs: 0, toTs: 1, bars: 1 }),
+    });
+
+    const server = (await startPalcoServer({
+      dbPath, port: 0, distDir: join(dir!, "no-such-dist"),
+    })) as PalcoServerHandle;
+
+    try {
+      const missingBefore = await get(server.port, "/api/feed");
+      expect(missingBefore.status).toBe(400);
+
+      const nonNumericBefore = await get(server.port, "/api/feed?before=abc");
+      expect(nonNumericBefore.status).toBe(400);
+
+      const negativeBefore = await get(server.port, "/api/feed?before=-5");
+      expect(negativeBefore.status).toBe(400);
+
+      const nonNumericLimit = await get(server.port, "/api/feed?before=10&limit=xyz");
+      expect(nonNumericLimit.status).toBe(400);
+    } finally {
+      await server.close();
+    }
+  });
+
   test("missing dist directory returns 503 asking to build", async () => {
     const dbPath = freshDbPath();
 

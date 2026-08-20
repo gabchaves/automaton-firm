@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { render, screen, cleanup } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react";
 import { MuralTab } from "../tabs/MuralTab";
 import { fixtureSnapshot } from "./fixtures";
 import { absoluteTimestamp } from "../format";
@@ -49,8 +49,9 @@ describe("MuralTab", () => {
     expect(screen.getByText("📈 Lucro em destaque")).toBeInTheDocument();
     // $1.50 (fixture id 50) is above this fixture's $0.20 individual-post
     // threshold (2% of cards.genStartMc = 1_000_000) — mulberry32(50)
-    // deterministically picks this exact pool line.
-    expect(screen.getByText("Realizei $1.50 em BTCUSDT. Quem não realiza, sonha.")).toBeInTheDocument();
+    // deterministically picks this exact pool line (v4.2's 8-variant win
+    // pool shifted the index; still the same deterministic pick per id).
+    expect(screen.getByText("Bati o mercado em BTCUSDT: $1.50. CNPJ imaginário, resultado real.")).toBeInTheDocument();
   });
 
   it("derives the small-trade threshold from cards.genStartMc: the fixture's $1.50 win clears its $0.20 threshold as an individual post, while the small ETHUSDT pair (well under it) still collapses into one grouped resumo", () => {
@@ -176,7 +177,7 @@ describe("MuralTab", () => {
 
     expect(firstRun).toBeTruthy();
     expect(firstRun).toBe(secondRun);
-    expect(firstRun).toContain("Realizei $1.50 em BTCUSDT. Quem não realiza, sonha.");
+    expect(firstRun).toContain("Bati o mercado em BTCUSDT: $1.50. CNPJ imaginário, resultado real.");
   });
 
   it("renders the reactions footer as decorative Orkut-style phrases, deterministically across two separate renders", () => {
@@ -285,5 +286,105 @@ describe("MuralTab — rotação de cadeira", () => {
     const rotationPost = screen.getByText("🔄 Rotação de cadeira").closest("li.orkut-scrap");
     expect(rotationPost?.textContent).toMatch(/evidência/i);
     expect(rotationPost?.textContent).not.toMatch(/desempenho|performance|mau trader/i);
+  });
+});
+
+describe("MuralTab — carregar mais / pagination (v4.2 Task 2b)", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    cleanup();
+  });
+
+  it("shows a 'ver mais scraps' button below the scrap list", () => {
+    render(<MuralTab snapshot={fixtureSnapshot} />);
+    expect(screen.getByRole("button", { name: "ver mais scraps" })).toBeInTheDocument();
+  });
+
+  it("fetches the next page from the oldest rendered event id, and appends older posts without losing or duplicating already-rendered ones", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          feed: [
+            {
+              id: 38,
+              ts: 1_699_999_900_000,
+              type: "trader_promoted",
+              html: "",
+              payload: { name: "Zara Lima", title: "Trader do Ciclo" },
+            },
+          ],
+        }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<MuralTab snapshot={fixtureSnapshot} />);
+    // Sanity check on the pre-click state (matches the "less frequent pass"
+    // fixture comment atop MuralTab tests above: 10 posts before any page load).
+    expect(screen.getByText("scraps (10)")).toBeInTheDocument();
+    expect(screen.getByText("📈 Lucro em destaque")).toBeInTheDocument();
+    expect(screen.getByText("📦 Desligamento")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "ver mais scraps" }));
+
+    // fixtureSnapshot's oldest rendered event is id 39 — that's the
+    // `before` the click must ask for, with the default page size.
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/feed?before=39&limit=20"));
+    await waitFor(() => expect(screen.getByText("scraps (11)")).toBeInTheDocument());
+
+    // Every pre-existing post is still there — nothing lost, nothing
+    // re-keyed/duplicated by the re-render.
+    expect(screen.getByText("📈 Lucro em destaque")).toBeInTheDocument();
+    expect(screen.getByText("📦 Desligamento")).toBeInTheDocument();
+    expect(screen.getByText("🔁 Resumo da mesa ETHUSDT")).toBeInTheDocument();
+
+    // The fetched older post is appended.
+    expect(screen.getByText("🏆 Promoção")).toBeInTheDocument();
+    expect(screen.getByText("Zara Lima", { selector: ".orkut-author-link" })).toBeInTheDocument();
+
+    // The page came back shorter than the requested limit -> no more pages.
+    expect(screen.queryByRole("button", { name: "ver mais scraps" })).not.toBeInTheDocument();
+  });
+
+  it("keeps the button visible when a full page comes back — there may still be more to load", async () => {
+    const fullPage = Array.from({ length: 20 }, (_, i) => ({
+      id: 38 - i,
+      ts: 1_699_999_900_000 - i,
+      type: "catch_up",
+      html: `⏪ catch-up de ${i} barras`,
+      payload: { fromTs: 0, toTs: 1, bars: i },
+    }));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ feed: fullPage }) }),
+    );
+
+    render(<MuralTab snapshot={fixtureSnapshot} />);
+    fireEvent.click(screen.getByRole("button", { name: "ver mais scraps" }));
+
+    await waitFor(() => expect(screen.getByText("scraps (30)")).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "ver mais scraps" })).toBeInTheDocument();
+  });
+
+  it("disables the button and shows a loading label while the fetch is in flight", async () => {
+    let resolveFetch: (value: unknown) => void = () => {};
+    const pending = new Promise((resolve) => {
+      resolveFetch = resolve;
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockReturnValue(pending.then(() => ({ ok: true, json: () => Promise.resolve({ feed: [] }) }))),
+    );
+
+    render(<MuralTab snapshot={fixtureSnapshot} />);
+    fireEvent.click(screen.getByRole("button", { name: "ver mais scraps" }));
+
+    const button = await screen.findByRole("button", { name: "carregando..." });
+    expect(button).toBeDisabled();
+
+    resolveFetch(undefined);
+    // An empty page (0 < limit) means no more pages: the button disappears
+    // once the in-flight request resolves.
+    await waitFor(() => expect(screen.queryByRole("button")).not.toBeInTheDocument());
   });
 });

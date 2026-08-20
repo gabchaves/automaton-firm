@@ -382,6 +382,23 @@ function computeLeaderboard(raw: BetterSqlite3.Database): PalcoSnapshot["leaderb
   });
 }
 
+interface RawFeedRow {
+  id: number;
+  ts: number;
+  type: string;
+  payload_json: string;
+}
+
+/** Shared row -> feed-item mapper: parses the stored payload JSON and
+ * formats the pre-escaped PT html via formatEventPt, the exact shape every
+ * feed-like array (`feed`, `org.history`, and `fetchFeedPage`'s pages)
+ * carries. Centralized so a formatting/escaping change only has one call
+ * site to touch. */
+function mapFeedRow(row: RawFeedRow): PalcoSnapshot["feed"][number] {
+  const payload = JSON.parse(row.payload_json) as Record<string, unknown>;
+  return { id: row.id, ts: row.ts, type: row.type, html: formatEventPt(row.type, payload), payload };
+}
+
 function computeFeed(raw: BetterSqlite3.Database): PalcoSnapshot["feed"] {
   const rows = raw
     .prepare(
@@ -389,12 +406,31 @@ function computeFeed(raw: BetterSqlite3.Database): PalcoSnapshot["feed"] {
        WHERE type NOT IN ('motor_started', 'motor_stopped')
        ORDER BY id DESC LIMIT ?`,
     )
-    .all(FEED_LIMIT) as { id: number; ts: number; type: string; payload_json: string }[];
+    .all(FEED_LIMIT) as RawFeedRow[];
 
-  return rows.map((row) => {
-    const payload = JSON.parse(row.payload_json) as Record<string, unknown>;
-    return { id: row.id, ts: row.ts, type: row.type, html: formatEventPt(row.type, payload), payload };
-  });
+  return rows.map(mapFeedRow);
+}
+
+/** Older page of the feed, for the Mural's "carregar mais" pagination
+ * (v4.2 Task 2b): every event with `id < opts.beforeId` (same excluded
+ * types, same html/payload shape as `feed` above), newest-first, capped at
+ * `opts.limit`. Pure SELECT, read-only — same escaping/formatting path as
+ * `computeFeed` via the shared `mapFeedRow`, so a page fetched here and a
+ * page baked into the initial snapshot are indistinguishable in shape.
+ * Exported for scripts/palco-server.mjs's `GET /api/feed` route. */
+export function fetchFeedPage(
+  raw: BetterSqlite3.Database,
+  opts: { beforeId: number; limit: number },
+): PalcoSnapshot["feed"] {
+  const rows = raw
+    .prepare(
+      `SELECT id, ts, type, payload_json FROM events
+       WHERE type NOT IN ('motor_started', 'motor_stopped') AND id < ?
+       ORDER BY id DESC LIMIT ?`,
+    )
+    .all(opts.beforeId, opts.limit) as RawFeedRow[];
+
+  return rows.map(mapFeedRow);
 }
 
 function lastEventId(raw: BetterSqlite3.Database): number {
@@ -473,12 +509,9 @@ function computeOrgHistory(raw: BetterSqlite3.Database, currentGenIds: string[])
        WHERE type IN (${typePlaceholders}) AND generation_id IN (${genPlaceholders})
        ORDER BY ts ASC, id ASC`,
     )
-    .all(...ORG_HISTORY_TYPES, ...currentGenIds) as { id: number; ts: number; type: string; payload_json: string }[];
+    .all(...ORG_HISTORY_TYPES, ...currentGenIds) as RawFeedRow[];
 
-  return rows.map((row) => {
-    const payload = JSON.parse(row.payload_json) as Record<string, unknown>;
-    return { id: row.id, ts: row.ts, type: row.type, html: formatEventPt(row.type, payload), payload };
-  });
+  return rows.map(mapFeedRow);
 }
 
 function computeOrg(raw: BetterSqlite3.Database): PalcoSnapshot["org"] {

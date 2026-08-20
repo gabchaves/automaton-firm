@@ -4,7 +4,7 @@ import { tmpdir } from "os";
 import { join } from "path";
 import { openMotorDb } from "../../motor/db.js";
 import type { MotorDb, TraderRow, GenerationRow } from "../../motor/db.js";
-import { buildSnapshot } from "../../motor/palco-data.js";
+import { buildSnapshot, fetchFeedPage } from "../../motor/palco-data.js";
 import { formatEventPt } from "../../motor/palco-format.js";
 
 let db: MotorDb | null = null;
@@ -280,6 +280,70 @@ describe("buildSnapshot: feed", () => {
     expect(snap.org.employees).toEqual([]);
     expect(snap.org.history).toEqual([]);
     expect(snap.org.hrPolicy).toBe(HR_POLICY);
+  });
+});
+
+describe("fetchFeedPage: v4.2 Task 2b Mural pagination", () => {
+  test("returns events with id < beforeId, newest-first, capped at limit", () => {
+    const d = fresh();
+    d.insertGeneration(generationRow({ id: "g1" }));
+    // 45 catch_up events -> sequential ids 1..45 (bars: i for id i, since
+    // this is the only insert loop and events.id is a fresh AUTOINCREMENT).
+    for (let i = 0; i < 45; i++) {
+      d.insertEvent({ ts: 1000 + i, type: "catch_up", traderId: null, generationId: null, payloadJson: JSON.stringify({ fromTs: 0, toTs: 1, bars: i }) });
+    }
+
+    const page = fetchFeedPage(d.raw, { beforeId: 41, limit: 5 });
+
+    expect(page.map((e) => e.id)).toEqual([40, 39, 38, 37, 36]);
+    expect(page[0].html).toBe(formatEventPt("catch_up", { fromTs: 0, toTs: 1, bars: 39 }));
+    expect(page[0].payload).toEqual({ fromTs: 0, toTs: 1, bars: 39 });
+  });
+
+  test("stops at the oldest event even when limit asks for more than exist", () => {
+    const d = fresh();
+    d.insertGeneration(generationRow({ id: "g1" }));
+    for (let i = 0; i < 5; i++) {
+      d.insertEvent({ ts: 1000 + i, type: "catch_up", traderId: null, generationId: null, payloadJson: JSON.stringify({ fromTs: 0, toTs: 1, bars: i }) });
+    }
+
+    const page = fetchFeedPage(d.raw, { beforeId: 4, limit: 20 });
+
+    expect(page.map((e) => e.id)).toEqual([3, 2, 1]);
+  });
+
+  test("excludes motor_started/motor_stopped, same as computeFeed", () => {
+    const d = fresh();
+    d.insertGeneration(generationRow({ id: "g1" }));
+    d.insertEvent({ ts: 0, type: "motor_started", traderId: null, generationId: null, payloadJson: "{}" }); // id 1
+    d.insertEvent({ ts: 1, type: "catch_up", traderId: null, generationId: null, payloadJson: JSON.stringify({ fromTs: 0, toTs: 1, bars: 1 }) }); // id 2
+    d.insertEvent({ ts: 2, type: "motor_stopped", traderId: null, generationId: null, payloadJson: "{}" }); // id 3
+
+    const page = fetchFeedPage(d.raw, { beforeId: 4, limit: 10 });
+
+    expect(page.map((e) => e.type)).toEqual(["catch_up"]);
+  });
+
+  test("beforeId at or below the oldest id returns an empty page", () => {
+    const d = fresh();
+    d.insertGeneration(generationRow({ id: "g1" }));
+    d.insertEvent({ ts: 0, type: "catch_up", traderId: null, generationId: null, payloadJson: JSON.stringify({ fromTs: 0, toTs: 1, bars: 1 }) }); // id 1
+
+    expect(fetchFeedPage(d.raw, { beforeId: 1, limit: 10 })).toEqual([]);
+  });
+
+  test("pairs continuously with computeFeed (via buildSnapshot): the next page's newest id is exactly one less than the feed's oldest id", () => {
+    const d = fresh();
+    d.insertGeneration(generationRow({ id: "g1" }));
+    for (let i = 0; i < 45; i++) {
+      d.insertEvent({ ts: 1000 + i, type: "catch_up", traderId: null, generationId: null, payloadJson: JSON.stringify({ fromTs: 0, toTs: 1, bars: i }) });
+    }
+
+    const snap = buildSnapshot(d.raw, 0);
+    const oldestInFeed = snap.feed[snap.feed.length - 1].id;
+    const page = fetchFeedPage(d.raw, { beforeId: oldestInFeed, limit: 5 });
+
+    expect(page[0].id).toBe(oldestInFeed - 1);
   });
 });
 

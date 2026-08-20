@@ -2,7 +2,9 @@
  * Deterministic "humanized" body copy for Mural posts (v3.2 plan, Commit
  * 2 — "mural humanizado"; pools expanded to 4-5 variants per type and the
  * humor sharpened toward the established "darwinismo com CNPJ imaginário"
- * voice in v4's Task B2). `pickBody` selects one line from a fixed
+ * voice in v4's Task B2 — trade_closed's win/loss pools grew again to 8
+ * variants each in the v4.2 round, since trade_closed is the highest-
+ * frequency event type by far). `pickBody` selects one line from a fixed
  * per-event-type pool using `rng`; callers seed that rng from
  * `mulberry32(eventId)` (see rng.ts), so the SAME feed item always renders
  * the SAME joke, forever — no Math.random, matching this codebase's
@@ -60,6 +62,9 @@ function tradeClosedBody(payload: Record<string, unknown>, rng: Rng): string {
       `Realizei ${pnlStr} em ${symbol}. Quem não realiza, sonha.`,
       `${pnlStr} de lucro em ${symbol}. Isso vai direto pro currículo genético.`,
       `Bati o mercado em ${symbol}: ${pnlStr}. CNPJ imaginário, resultado real.`,
+      `${symbol} pagou bem hoje: ${pnlStr} garantidos, sem estresse extra pro genoma.`,
+      `Fechamento redondo em ${symbol}: ${pnlStr}. Não é sorte, é seleção natural funcionando.`,
+      `${pnlStr} de saldo positivo em ${symbol}. O book agradece, o genoma se gaba.`,
     ]);
   }
 
@@ -70,6 +75,9 @@ function tradeClosedBody(payload: Record<string, unknown>, rng: Rng): string {
     `Stop atingido em ${symbol}. O mercado teve uma opinião diferente da minha.`,
     `${pnlStr} em ${symbol}. Um dia de cada vez na luta contra a extinção.`,
     `Doeu ${pnlStr} em ${symbol}. Já foi anotado no relatório de evidências do RH.`,
+    `${pnlStr} em ${symbol}: o mercado corrigiu meu excesso de confiança.`,
+    `Perda de ${pnlStr} em ${symbol}. O genoma anota e segue — evidência é evidência.`,
+    `${pnlStr} no vermelho em ${symbol}. Fica pro próximo ciclo de avaliação.`,
   ]);
 }
 

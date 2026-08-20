@@ -620,6 +620,38 @@ li.orkut-scrap:last-child {
   cursor: default;
 }
 
+/* "carregar mais" pagination control (v4.2 Task 2b) — sits below the scrap
+ * list, inside the light Orkut inset, so it stays in the same retro
+ * palette as the rest of the panel rather than borrowing the page's dark
+ * pxpush `button` default (transparent/hairline/green-hover — see the base
+ * `button` rule near the top of this file). New selectors only, nothing
+ * here touches an existing rule. */
+.orkut-load-more {
+  margin-top: 12px;
+  text-align: center;
+}
+
+.orkut-load-more-btn {
+  font-family: Verdana, Geneva, sans-serif;
+  font-size: 11px;
+  font-weight: bold;
+  color: #315c99;
+  background: #fff;
+  border: 1px solid #ccd6e6;
+  border-radius: 6px;
+  padding: 6px 18px;
+  cursor: pointer;
+}
+
+.orkut-load-more-btn:hover:not(:disabled) {
+  background: #dbe4f2;
+}
+
+.orkut-load-more-btn:disabled {
+  color: #8a97ab;
+  cursor: default;
+}
+
 /* Tiny grey panel footer — the disclaimer, restyled to live inside the
  * light inset rather than as the page's dark `.label` chip. */
 .orkut-disclaimer-footer {

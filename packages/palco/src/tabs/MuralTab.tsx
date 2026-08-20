@@ -4,7 +4,7 @@ import type { PalcoSnapshot } from "../types";
 import { absoluteTimestamp } from "../format";
 import { initials, avatarBackground } from "../avatar";
 import { seededReactions, seededKarma, seededPick } from "../rng";
-import { buildMuralPosts } from "./mural-posts";
+import { buildMuralPosts, type FeedItem } from "./mural-posts";
 
 interface MuralTabProps {
   snapshot: PalcoSnapshot | null;
@@ -30,6 +30,13 @@ const SLIDE_DOWN_DURATION_S = 0.35;
 // not be cryptographically distinct).
 const RECENT_VISITORS_COUNT = 3;
 const RECENT_VISITORS_SEED_OFFSET = 7_919;
+
+// v4.2 Task 2b: "carregar mais" pagination — how many older events each
+// click asks GET /api/feed for. Mirrors the server's own DEFAULT_FEED_LIMIT
+// (scripts/palco-server.mjs); a mismatch isn't a correctness bug (the
+// server always honors ?limit=), just a slightly odd page size, so no
+// runtime coupling is needed between the two.
+const FEED_PAGE_LIMIT = 20;
 
 /** "N pessoas aplaudiram" / "1 pessoa aplaudiu" — same PT singular/plural
  * handling convention as mural-posts.ts's grouped-trade count. */
@@ -58,6 +65,13 @@ function recentVisitorNames(employees: Array<{ name: string }>, lastEventId: num
 export function MuralTab({ snapshot }: MuralTabProps) {
   const prevIdsRef = useRef<Set<number>>(new Set());
   const [newIds, setNewIds] = useState<Set<number>>(new Set());
+  // v4.2 Task 2b: older pages fetched via "carregar mais", accumulated
+  // across clicks and appended after the live feed (see `combinedFeed`
+  // below). `hasMore` hides the button once a page comes back short of
+  // FEED_PAGE_LIMIT (the server's tell that there's nothing older left).
+  const [olderItems, setOlderItems] = useState<FeedItem[]>([]);
+  const [hasMore, setHasMore] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const feed = snapshot?.feed ?? [];
 
   useEffect(() => {
@@ -74,8 +88,15 @@ export function MuralTab({ snapshot }: MuralTabProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [snapshot?.lastEventId]);
 
+  // The live feed (newest N events) followed by every older page loaded so
+  // far — one array fed through buildMuralPosts so trade-grouping/karma/
+  // voice all run through the SAME logic for old and new posts alike (no
+  // second code path to keep in sync). Ids are unique and the live feed's
+  // oldest id only ever moves forward over time, so appending older pages
+  // after it can never reintroduce a duplicate.
+  const combinedFeed = useMemo(() => [...feed, ...olderItems], [feed, olderItems]);
   const genStartMc = snapshot?.cards.genStartMc;
-  const posts = useMemo(() => buildMuralPosts(feed, genStartMc), [feed, genStartMc]);
+  const posts = useMemo(() => buildMuralPosts(combinedFeed, genStartMc), [combinedFeed, genStartMc]);
   const employees = snapshot?.org.employees ?? [];
   const lastEventId = snapshot?.lastEventId ?? 0;
   const recentVisitors = useMemo(
@@ -87,6 +108,30 @@ export function MuralTab({ snapshot }: MuralTabProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [employees.length, lastEventId],
   );
+
+  /** "carregar mais" click handler (v4.2 Task 2b): fetches the next older
+   * page from the oldest event id currently rendered, appends it to
+   * `olderItems`, and hides the button once a page comes back short of
+   * FEED_PAGE_LIMIT — the server's signal there's nothing older left. A
+   * fetch/network failure leaves `hasMore` untouched so the button stays
+   * clickable for a manual retry, instead of silently going dead. */
+  async function handleLoadMore(): Promise<void> {
+    if (combinedFeed.length === 0) return;
+    const oldestId = combinedFeed[combinedFeed.length - 1].id;
+
+    setIsLoadingMore(true);
+    try {
+      const res = await fetch(`/api/feed?before=${oldestId}&limit=${FEED_PAGE_LIMIT}`);
+      if (!res.ok) return;
+      const data = (await res.json()) as { feed: FeedItem[] };
+      setOlderItems((prev) => [...prev, ...data.feed]);
+      if (data.feed.length < FEED_PAGE_LIMIT) setHasMore(false);
+    } catch {
+      // Network hiccup — leave hasMore as-is, the button remains clickable.
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }
 
   if (posts.length === 0) {
     return <p>Sem eventos ainda.</p>;
@@ -193,6 +238,19 @@ export function MuralTab({ snapshot }: MuralTabProps) {
             );
           })}
         </ul>
+
+        {hasMore && (
+          <div className="orkut-load-more">
+            <button
+              type="button"
+              className="orkut-load-more-btn"
+              onClick={handleLoadMore}
+              disabled={isLoadingMore}
+            >
+              {isLoadingMore ? "carregando..." : "ver mais scraps"}
+            </button>
+          </div>
+        )}
 
         <p className="orkut-disclaimer-footer">{REACTIONS_DISCLAIMER}</p>
       </div>

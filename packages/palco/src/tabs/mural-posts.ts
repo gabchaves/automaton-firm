@@ -19,7 +19,9 @@ import { usd } from "../format";
 import { mulberry32 } from "../rng";
 import { pickBody, signedUsd } from "../muralVoice";
 
-type FeedItem = PalcoSnapshot["feed"][number];
+// Exported so MuralTab.tsx can type the older pages it fetches from
+// GET /api/feed (v4.2 Task 2b) without re-deriving the same shape.
+export type FeedItem = PalcoSnapshot["feed"][number];
 
 export interface MuralAuthor {
   name: string;

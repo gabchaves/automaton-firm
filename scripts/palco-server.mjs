@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 /**
  * Palco SSE server: serves the built React front from `distDir` and pushes
  * `PalcoSnapshot`s over `/api/snapshot` (one-shot) and `/events` (SSE) by
@@ -6,6 +5,15 @@
  *
  * Uso: node scripts/palco-server.mjs [--db path] [--port n] [--dist path]
  * Requer Node 22 (better-sqlite3).
+ *
+ * No shebang line on purpose: this file is always invoked as `node
+ * scripts/palco-server.mjs ...` (see the usage line above and every test/
+ * caller in this repo), never executed directly, and a leading `#!/usr/bin/
+ * env node` breaks Vitest's SSR module transform for anything that imports
+ * this file (src/__tests__/motor/palco-server.test.ts) — the parser trips
+ * on the hashbang and mis-reports a syntax error in the IMPORTING file
+ * instead. Confirmed via `node --check` (fine) vs. importing under Vitest
+ * (fails) with/without the shebang line.
  */
 
 import http from "node:http";
@@ -14,13 +22,20 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import Database from "better-sqlite3";
-import { buildSnapshot } from "../dist/motor/palco-data.js";
+import { buildSnapshot, fetchFeedPage } from "../dist/motor/palco-data.js";
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.join(SCRIPT_DIR, "..");
 
 const POLL_INTERVAL_MS = 5_000;
 const HEARTBEAT_INTERVAL_MS = 30_000;
+
+// v4.2 Task 2b: GET /api/feed pagination defaults/cap — "carregar mais" in
+// the Mural asks for DEFAULT_FEED_LIMIT items per click; MAX_FEED_LIMIT is
+// a defensive ceiling against an abusive/typo'd ?limit= value, never
+// reachable through the front's own UI.
+const DEFAULT_FEED_LIMIT = 20;
+const MAX_FEED_LIMIT = 100;
 
 const CONTENT_TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -47,6 +62,42 @@ function lastEventIdOf(db) {
 
 function handleSnapshot(res, db) {
   sendJson(res, 200, buildSnapshot(db, Date.now()));
+}
+
+/** Strict positive-integer query-param parser: `undefined` for a param that
+ * wasn't supplied at all (caller decides whether that's an error or a
+ * default), `null` for one that WAS supplied but isn't a positive integer
+ * (caller responds 400). Deliberately stricter than `Number()` — that
+ * would silently accept "12px", "", " ", or "-5" as numbers. */
+function parsePositiveIntParam(raw) {
+  if (raw === null) return undefined;
+  if (!/^\d+$/.test(raw)) return null;
+  const n = Number(raw);
+  return Number.isSafeInteger(n) && n > 0 ? n : null;
+}
+
+/**
+ * GET /api/feed?before=<eventId>&limit=<n> — an older page of the Mural
+ * feed for the "carregar mais" control (v4.2 Task 2b). `before` is
+ * required (there's no sane "give me older than nothing" default); `limit`
+ * defaults to DEFAULT_FEED_LIMIT and is capped at MAX_FEED_LIMIT. Same
+ * read-only db, same JSON envelope style as handleSnapshot.
+ */
+function handleFeed(res, db, query) {
+  const beforeId = parsePositiveIntParam(query.get("before"));
+  if (beforeId === undefined || beforeId === null) {
+    sendJson(res, 400, { error: "'before' query param is required and must be a positive integer event id" });
+    return;
+  }
+
+  const rawLimit = parsePositiveIntParam(query.get("limit"));
+  if (rawLimit === null) {
+    sendJson(res, 400, { error: "'limit' query param must be a positive integer" });
+    return;
+  }
+  const limit = Math.min(rawLimit ?? DEFAULT_FEED_LIMIT, MAX_FEED_LIMIT);
+
+  sendJson(res, 200, { feed: fetchFeedPage(db, { beforeId, limit }) });
 }
 
 function handleEvents(req, res, db, activeStreams) {
@@ -138,6 +189,11 @@ export async function startPalcoServer({ dbPath, port, distDir }) {
 
     if (req.method === "GET" && urlPath === "/api/snapshot") {
       handleSnapshot(res, db);
+      return;
+    }
+    if (req.method === "GET" && urlPath === "/api/feed") {
+      const query = new URL(req.url ?? "/", "http://localhost").searchParams;
+      handleFeed(res, db, query);
       return;
     }
     if (req.method === "GET" && urlPath === "/events") {

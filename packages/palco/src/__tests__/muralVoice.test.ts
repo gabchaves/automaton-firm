@@ -66,7 +66,10 @@ describe("pickBody", () => {
     const first = pickBody("trade_closed", payload, mulberry32(999));
     const second = pickBody("trade_closed", payload, mulberry32(999));
     expect(first).toBe(second);
-    expect(first).toBe("Bati o mercado em BTCUSDT: $1.50. CNPJ imaginário, resultado real.");
+    // v4.2 pool expansion (8 win variants): mulberry32(999)'s first draw now
+    // lands on the 8th line, not the 5th — same seed, same eternal joke,
+    // just a different index now that the pool is bigger.
+    expect(first).toBe("$1.50 de saldo positivo em BTCUSDT. O book agradece, o genoma se gaba.");
   });
 
   it("picks the liquidated pool over the loss pool when payload.liquidated is true", () => {
@@ -80,7 +83,10 @@ describe("pickBody", () => {
 
   it("uses a signed dollar amount for a loss", () => {
     const body = pickBody("trade_closed", { symbol: "ADAUSDT", realizedPnlMc: -120_000 }, mulberry32(1));
-    expect(body).toBe("-$1.20 em ADAUSDT. Um dia de cada vez na luta contra a extinção.");
+    // v4.2 pool expansion (8 loss variants) shifts mulberry32(1)'s draw to a
+    // different index than before the round — same determinism guarantee,
+    // new pool size.
+    expect(body).toBe("-$1.20 em ADAUSDT: o mercado corrigiu meu excesso de confiança.");
   });
 
   it("uses a plain (unsigned) dollar amount for a win", () => {
