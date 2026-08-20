@@ -42,7 +42,6 @@ const ROLE_CHIP = "Legal Operations · Automação · IA";
 const AUTHOR_NAME = "Gabriel Ernesto Chaves";
 
 const LINKEDIN_URL = "https://www.linkedin.com/in/gabriel-chaves2/";
-const GITHUB_URL = "https://github.com/gabchaves";
 
 const BIO =
   "Analista em Legal Operations na Reasset Capital (São José dos Campos, SP). Formação jurídica, aprovado na OAB, pós em Compliance Contratual em andamento — e uma obsessão por transformar processo em software. De dia, traduzo dores de negócio em automação com ROI de verdade; de noite, administro uma firma de robôs que me deixam orgulhoso e falido em dinheiro de mentira. Este projeto é o meu laboratório: agentes de IA, evolução e honestidade estatística no mesmo pregão.";
@@ -146,10 +145,6 @@ export function SobreTab({ snapshot }: SobreTabProps) {
           <a href="mailto:gabchaves2@gmail.com">gabchaves2@gmail.com</a> ·{" "}
           <a href={LINKEDIN_URL} target="_blank" rel="noopener noreferrer">
             LinkedIn
-          </a>{" "}
-          ·{" "}
-          <a href={GITHUB_URL} target="_blank" rel="noopener noreferrer">
-            GitHub
           </a>
         </p>
       </section>

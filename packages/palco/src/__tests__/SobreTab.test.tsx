@@ -60,7 +60,7 @@ describe("SobreTab", () => {
     expect(strip?.querySelectorAll(".sobre-flow-arrow")).toHaveLength(2);
   });
 
-  it("renders real mailto/LinkedIn/GitHub contact links, each opening in a new tab safely", () => {
+  it("renders real mailto/LinkedIn contact links, each opening in a new tab safely (no GitHub link — keeps the public repo's commit history from surfacing here)", () => {
     render(<SobreTab snapshot={fixtureSnapshot} />);
 
     const mailLink = screen.getByRole("link", { name: /gabchaves2@gmail\.com/i });
@@ -71,10 +71,7 @@ describe("SobreTab", () => {
     expect(linkedinLink).toHaveAttribute("target", "_blank");
     expect(linkedinLink).toHaveAttribute("rel", "noopener noreferrer");
 
-    const githubLink = screen.getByRole("link", { name: "GitHub" });
-    expect(githubLink).toHaveAttribute("href", "https://github.com/gabchaves");
-    expect(githubLink).toHaveAttribute("target", "_blank");
-    expect(githubLink).toHaveAttribute("rel", "noopener noreferrer");
+    expect(screen.queryByRole("link", { name: "GitHub" })).not.toBeInTheDocument();
   });
 
   it("v4.2: does not render the fact-cards row anymore (removed — it duplicated the global hero strip)", () => {
