@@ -56,21 +56,21 @@ describe("MuralTab", () => {
     ).toBeInTheDocument();
   });
 
-  it("derives the small-trade threshold from cards.genStartMc: the fixture's $1.50 win clears its $0.20 threshold as an individual post, while the small ETHUSDT pair (well under it) still collapses into one grouped resumo", () => {
+  it("derives the small-trade threshold from cards.genStartMc: the fixture's $1.50 win clears its $0.20 threshold as an individual post, while the small ETHUSDT pair (well under it) still collapses into one grouped balanço", () => {
     render(<MuralTab snapshot={fixtureSnapshot} />);
 
-    // Big win: its own spotlight post, never folded into a resumo group.
+    // Big win: its own spotlight post, never folded into a grouped balanço.
     expect(screen.getByText("📈 Lucro em destaque")).toBeInTheDocument();
     const bigWinScrap = screen.getByText("📈 Lucro em destaque").closest("li.orkut-scrap");
-    expect(bigWinScrap?.textContent).not.toContain("Resumo da mesa");
+    expect(bigWinScrap?.textContent).not.toContain("Balanço do dia");
 
     // Small trades (id 42: +$0.02, id 39: -$0.01 — both well under $0.20):
-    // collapsed into exactly one grouped resumo post.
-    expect(screen.getByText("🔁 Resumo da mesa ETHUSDT")).toBeInTheDocument();
-    const resumoScraps = Array.from(document.querySelectorAll("li.orkut-scrap")).filter((li) =>
-      li.textContent?.includes("Resumo da mesa"),
+    // collapsed into exactly one grouped "balanço do dia" post.
+    expect(screen.getByText("🔁 Balanço do dia")).toBeInTheDocument();
+    const groupedScraps = Array.from(document.querySelectorAll("li.orkut-scrap")).filter((li) =>
+      li.textContent?.includes("Balanço do dia"),
     );
-    expect(resumoScraps).toHaveLength(1);
+    expect(groupedScraps).toHaveLength(1);
   });
 
   it("renders the scrap's author as a link-styled name plus cargo, and an absolute Orkut timestamp", () => {
@@ -98,18 +98,20 @@ describe("MuralTab", () => {
     expect(screen.getAllByText("RH").length).toBeGreaterThan(0);
   });
 
-  it("collapses small same-symbol trades into one resumo post, even when they aren't consecutive in the feed", () => {
+  it("collapses small same-symbol trades into one grouped post, even when they aren't consecutive in the feed", () => {
     render(<MuralTab snapshot={fixtureSnapshot} />);
     // Fixture has two small ETHUSDT trade_closed events (id 42: +$0.02, id
     // 39: -$0.01 — net +$0.01, count 2), separated by several unrelated
-    // events (including id 41's dropped trade_opened). They still collapse
-    // into exactly ONE "resumo da mesa ETHUSDT" post, per symbol per render.
-    expect(screen.getByText("🔁 Resumo da mesa ETHUSDT")).toBeInTheDocument();
+    // events (including id 41's dropped trade_opened). Neither carries a
+    // traderName in this fixture, so both fall back to grouping by symbol
+    // (v4.7's real behavior groups by trader when traderName is present —
+    // see mural-posts.test.ts) — they still collapse into exactly ONE post.
+    expect(screen.getByText("🔁 Balanço do dia")).toBeInTheDocument();
     expect(
       screen.getByText("2 operações miúdas, saldo $0.01. Formiguinha também é lucro."),
     ).toBeInTheDocument();
-    const resumoScraps = document.querySelectorAll("li.orkut-scrap");
-    const matching = Array.from(resumoScraps).filter((li) => li.textContent?.includes("Resumo da mesa"));
+    const groupedScraps = document.querySelectorAll("li.orkut-scrap");
+    const matching = Array.from(groupedScraps).filter((li) => li.textContent?.includes("Balanço do dia"));
     expect(matching).toHaveLength(1);
   });
 
@@ -122,7 +124,7 @@ describe("MuralTab", () => {
     expect(screen.queryByText(/notional/)).not.toBeInTheDocument();
   });
 
-  it("shows the net-negative resumo variant when a symbol's small trades net a loss", () => {
+  it("shows the net-negative variant when a symbol's small trades net a loss", () => {
     const losingGroupSnapshot: PalcoSnapshot = {
       ...fixtureSnapshot,
       feed: [
@@ -143,7 +145,7 @@ describe("MuralTab", () => {
       ],
     };
     render(<MuralTab snapshot={losingGroupSnapshot} />);
-    expect(screen.getByText("🔁 Resumo da mesa SOLUSDT")).toBeInTheDocument();
+    expect(screen.getByText("🔁 Balanço do dia")).toBeInTheDocument();
     expect(screen.getByText("2 operações miúdas, saldo -$0.04. A corretora agradece as taxas.")).toBeInTheDocument();
   });
 
@@ -339,7 +341,7 @@ describe("MuralTab — carregar mais / pagination (v4.2 Task 2b)", () => {
     // re-keyed/duplicated by the re-render.
     expect(screen.getByText("📈 Lucro em destaque")).toBeInTheDocument();
     expect(screen.getByText("📦 Desligamento")).toBeInTheDocument();
-    expect(screen.getByText("🔁 Resumo da mesa ETHUSDT")).toBeInTheDocument();
+    expect(screen.getByText("🔁 Balanço do dia")).toBeInTheDocument();
 
     // The fetched older post is appended.
     expect(screen.getByText("🏆 Promoção")).toBeInTheDocument();

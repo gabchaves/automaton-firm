@@ -111,27 +111,55 @@ function groupedTradeBody(count: number, netPnlMc: number): string {
     : `${countLabel}, saldo ${saldo}. A corretora agradece as taxas.`;
 }
 
-/** Mutable accumulator for one symbol's small-trade "resumo" post: the
- * `post` object is pushed into the result array ONCE, then mutated in
- * place as more small trades of that symbol turn up anywhere else in the
- * feed (not just consecutively) — "one post per symbol per render". */
+/** Real trader identity for a grouped small-trade post — same resolution
+ * as buildEventPost's individual trade_closed case. Falls back to the
+ * old symbol-as-persona framing only when traderName is missing (an event
+ * that predates palco-data.ts's traderName enrichment), never fabricating
+ * a name. */
+function groupAuthorFor(
+  item: FeedItem,
+  symbol: string,
+  employees: Employee[],
+  leaderboard: LeaderboardEntry[],
+): MuralAuthor {
+  const traderName = str(item.payload, "traderName", "");
+  if (!traderName) return { name: symbol, cargo: `Trader · Mesa ${symbol}` };
+  return { name: traderName, cargo: cargoTituloFor(traderName, employees, leaderboard) ?? "Trader" };
+}
+
+/** Mutable accumulator for one TRADER's small-trade "resumo" post — grouped
+ * by trader, not by mesa/symbol: a mesa can have several traders sharing
+ * the same symbol, and posing as "SOLUSDT the trader" isn't a real person
+ * (user feedback: every post should read like it's from someone on the
+ * firm's own social network, not a ticker). Each trader trades one fixed
+ * symbol for their whole lifetime, so grouping by trader never mixes
+ * symbols within a post. The `post` object is pushed into the result array
+ * ONCE, then mutated in place as more of that trader's small trades turn up
+ * anywhere else in the feed (not just consecutively) — "one post per
+ * trader per render". */
 interface GroupAccumulator {
   post: MuralPost;
   count: number;
   netPnlMc: number;
 }
 
-function startGroupedTrade(item: FeedItem, symbol: string): GroupAccumulator {
+function startGroupedTrade(
+  item: FeedItem,
+  groupKey: string,
+  employees: Employee[],
+  leaderboard: LeaderboardEntry[],
+): GroupAccumulator {
   const netPnlMc = num(item.payload, "realizedPnlMc");
+  const symbol = symbolOf(item);
   const acc: GroupAccumulator = {
     count: 1,
     netPnlMc,
     post: {
-      key: `group-${symbol}-${item.id}`,
-      ts: item.ts, // feed is newest-first, so the FIRST small trade of this symbol encountered is the most recent
+      key: `group-${groupKey}-${item.id}`,
+      ts: item.ts, // feed is newest-first, so the FIRST small trade of this trader encountered is the most recent
       memberIds: [item.id],
-      author: { name: symbol, cargo: `Trader · Mesa ${symbol}` },
-      headline: `🔁 Resumo da mesa ${symbol}`,
+      author: groupAuthorFor(item, symbol, employees, leaderboard),
+      headline: "🔁 Balanço do dia",
       body: "",
       reactionSeed: item.id,
       includeSad: false,
@@ -295,8 +323,10 @@ function buildEventPost(item: FeedItem, employees: Employee[], leaderboard: Lead
  *   a position" scrap for every trade.
  * - `trade_closed` posts individually only when |pnl| >= 2% of `genStartMc`
  *   (see `DEFAULT_GEN_START_MC`/`SMALL_TRADE_DIVISOR` above); smaller ones
- *   fold into one "resumo da mesa {symbol}" post per symbol, aggregated
- *   across the WHOLE rendered feed (not just consecutive entries).
+ *   fold into one "balanço do dia" post per TRADER (v4.7: was per symbol —
+ *   a mesa can have several traders sharing it, and posing as "SOLUSDT the
+ *   trader" isn't a real person), aggregated across the WHOLE rendered feed
+ *   (not just consecutive entries).
  * - `hr_review` posts only when the cycle actually fired or promoted
  *   someone; a quiet review (0 actions) is skipped entirely.
  * - Every other event type maps 1:1 to its own post, same as before.
@@ -318,20 +348,22 @@ export function buildMuralPosts(
 ): MuralPost[] {
   const smallTradeThresholdMc = genStartMc / SMALL_TRADE_DIVISOR;
   const posts: MuralPost[] = [];
-  const groupsBySymbol = new Map<string, GroupAccumulator>();
+  const groupsByTrader = new Map<string, GroupAccumulator>();
 
   for (const item of feed) {
     if (item.type === "trade_opened") continue;
     if (item.type === "hr_review" && !hasHrActions(item.payload)) continue;
 
     if (item.type === "trade_closed" && isSmallTrade(item, smallTradeThresholdMc)) {
-      const symbol = symbolOf(item);
-      const existing = groupsBySymbol.get(symbol);
+      // traderName groups by the real person; falling back to symbol only
+      // for pre-enrichment events that never got a traderName at all.
+      const groupKey = str(item.payload, "traderName", "") || symbolOf(item);
+      const existing = groupsByTrader.get(groupKey);
       if (existing) {
         addToGroupedTrade(existing, item);
       } else {
-        const acc = startGroupedTrade(item, symbol);
-        groupsBySymbol.set(symbol, acc);
+        const acc = startGroupedTrade(item, groupKey, employees, leaderboard);
+        groupsByTrader.set(groupKey, acc);
         posts.push(acc.post);
       }
       continue;

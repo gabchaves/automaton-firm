@@ -71,7 +71,7 @@ describe("buildMuralPosts — small-trade threshold derivation (v4 Task B2)", ()
     const posts = buildMuralPosts([tradeClosed(1, "BTCUSDT", onePercentMc)], CUSTOM_GEN_START_MC);
 
     expect(posts).toHaveLength(1);
-    expect(posts[0].headline).toBe("🔁 Resumo da mesa BTCUSDT");
+    expect(posts[0].headline).toBe("🔁 Balanço do dia");
   });
 
   it("keeps a trade above 2% of genStartMc as its own individual spotlight post", () => {
@@ -94,7 +94,7 @@ describe("buildMuralPosts — small-trade threshold derivation (v4 Task B2)", ()
     // = $2.00), the exact same $1.50 pnl instead folds into the resumo —
     // proving the threshold moves with the fixture, not a fixed dollar figure.
     const atLargeScale = buildMuralPosts([tradeClosed(4, "ETHUSDT", pnlMc)], 10_000_000);
-    expect(atLargeScale[0].headline).toBe("🔁 Resumo da mesa ETHUSDT");
+    expect(atLargeScale[0].headline).toBe("🔁 Balanço do dia");
   });
 });
 
@@ -141,5 +141,54 @@ describe("buildMuralPosts — real name + cargo for trader-authored posts", () =
     const posts = buildMuralPosts([traderHired(5, "Zeca Prado")], GEN_START_MC);
 
     expect(posts[0].author).toEqual({ name: "Zeca Prado", cargo: "Trader" });
+  });
+});
+
+describe("buildMuralPosts — small-trade grouping is per TRADER, not per mesa/symbol (v4.7)", () => {
+  const GEN_START_MC = 5_000_000; // 2% -> $1.00 threshold
+  const SMALL_PNL_MC = 50_000; // $0.50 — well under the $1.00 threshold
+
+  it("groups a trader's own small trades under their real name + cargo instead of the symbol", () => {
+    const posts = buildMuralPosts(
+      [tradeClosedByTrader(1, "BTCUSDT", SMALL_PNL_MC, "Zeca Prado")],
+      GEN_START_MC,
+      [employee({ name: "Zeca Prado" })],
+      [],
+    );
+
+    expect(posts).toHaveLength(1);
+    expect(posts[0].headline).toBe("🔁 Balanço do dia");
+    expect(posts[0].author).toEqual({ name: "Zeca Prado", cargo: "Trader Júnior · contratação externa" });
+  });
+
+  it("gives two different traders sharing the same symbol SEPARATE grouped posts, not one merged 'mesa' post", () => {
+    const posts = buildMuralPosts(
+      [
+        tradeClosedByTrader(1, "BTCUSDT", SMALL_PNL_MC, "Zeca Prado"),
+        tradeClosedByTrader(2, "BTCUSDT", SMALL_PNL_MC, "Ana Costa"),
+      ],
+      GEN_START_MC,
+      [employee({ name: "Zeca Prado" }), employee({ traderId: "t-ana", name: "Ana Costa" })],
+      [],
+    );
+
+    expect(posts).toHaveLength(2);
+    const names = posts.map((p) => p.author.name).sort();
+    expect(names).toEqual(["Ana Costa", "Zeca Prado"]);
+  });
+
+  it("keeps accumulating the same trader's later small trades into their one existing post", () => {
+    const posts = buildMuralPosts(
+      [
+        tradeClosedByTrader(1, "BTCUSDT", SMALL_PNL_MC, "Zeca Prado"),
+        tradeClosedByTrader(2, "BTCUSDT", SMALL_PNL_MC, "Zeca Prado"),
+      ],
+      GEN_START_MC,
+      [employee({ name: "Zeca Prado" })],
+      [],
+    );
+
+    expect(posts).toHaveLength(1);
+    expect(posts[0].body).toContain("2 operações miúdas");
   });
 });
