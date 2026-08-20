@@ -37,6 +37,14 @@ describe("EmpresaTab", () => {
     expect(screen.getByText(/próxima avaliação em \d+h\d{2}/, { selector: ".rh-next-review" })).toBeInTheDocument();
   });
 
+  it("renders the CEO card, framed as ceremonial since the genome writes the strategy", () => {
+    render(<EmpresaTab snapshot={fixtureSnapshot} />);
+
+    expect(screen.getByText("CEO", { selector: ".ceo-card .section-title" })).toBeInTheDocument();
+    expect(screen.getByText(/Cargo vago — ocupado pela evolução/)).toBeInTheDocument();
+    expect(screen.getByText(/100% genoma/, { selector: ".ceo-chip" })).toBeInTheDocument();
+  });
+
   it("renders every current-generation employee as a plain roster row with book/status", () => {
     render(<EmpresaTab snapshot={fixtureSnapshot} />);
 

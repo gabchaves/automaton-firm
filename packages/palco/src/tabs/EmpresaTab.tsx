@@ -50,32 +50,56 @@ export function EmpresaTab({ snapshot }: EmpresaTabProps) {
 
   return (
     <div className="empresa-blocks">
-      <section className="rh-card">
-        <div className="rh-card-heading">
-          <span className="org-rh-icon" aria-hidden="true">
-            🗂️
-          </span>
-          <h2 className="section-title">Recursos Humanos</h2>
-        </div>
-        <p className="rh-policy">{org?.hrPolicy ?? ""}</p>
-        <div className="rh-counters">
-          <div>
-            <span className="v">{demissoes}</span>
-            <span className="label">demissões no ciclo</span>
+      <div className="leadership-row">
+        {/* Honest by construction, same rule as the Mural's reaction
+            disclaimer: the CEO cadeira existe no organograma, mas não
+            decide trade nenhum. A pesquisa já testou um CEO de verdade
+            (evolução de estratégia via IA — ver docs/TRADING-RESEARCH.md)
+            e ele não bateu o baseline aleatório. Quem escreve a estratégia
+            hoje é o genoma; este card não finge o contrário. */}
+        <section className="ceo-card">
+          <div className="rh-card-heading">
+            <span className="org-rh-icon" aria-hidden="true">
+              🧬
+            </span>
+            <h2 className="section-title">CEO</h2>
           </div>
-          <div>
-            <span className="v">{promocoes}</span>
-            <span className="label">promoções no ciclo</span>
+          <p className="rh-policy">
+            Cargo vago — ocupado pela evolução. Já testamos um CEO de verdade (estratégia escrita por IA sobre
+            indicadores técnicos); não bateu o controle aleatório e foi aposentado com honras. Hoje quem decide é o
+            genoma — momentum, reversão à média, breakout e filtro de regime, recombinados por mutação. A cadeira
+            segue lá por tradição corporativa.
+          </p>
+          <span className="label ceo-chip">🧬 estratégia: 100% genoma</span>
+        </section>
+
+        <section className="rh-card">
+          <div className="rh-card-heading">
+            <span className="org-rh-icon" aria-hidden="true">
+              🗂️
+            </span>
+            <h2 className="section-title">Recursos Humanos</h2>
           </div>
-          <div>
-            <span className="v">{rotacoes}</span>
-            <span className="label">rotações no ciclo</span>
+          <p className="rh-policy">{org?.hrPolicy ?? ""}</p>
+          <div className="rh-counters">
+            <div>
+              <span className="v">{demissoes}</span>
+              <span className="label">demissões no ciclo</span>
+            </div>
+            <div>
+              <span className="v">{promocoes}</span>
+              <span className="label">promoções no ciclo</span>
+            </div>
+            <div>
+              <span className="v">{rotacoes}</span>
+              <span className="label">rotações no ciclo</span>
+            </div>
           </div>
-        </div>
-        <p className="rh-next-review">
-          próxima avaliação em {hours}h{String(minutes).padStart(2, "0")}
-        </p>
-      </section>
+          <p className="rh-next-review">
+            próxima avaliação em {hours}h{String(minutes).padStart(2, "0")}
+          </p>
+        </section>
+      </div>
 
       <div className="roster-block">
         <h2 className="section-title">Organograma</h2>

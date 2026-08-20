@@ -679,6 +679,21 @@ li.orkut-scrap:last-child {
   gap: 32px;
 }
 
+/* Leadership row — CEO + RH side by side, same two-column pattern as
+ * .pregao-bottom-grid, so the two "who runs this place" cards read as one
+ * paired unit instead of two unrelated blocks stacked vertically. */
+.leadership-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+@media (max-width: 720px) {
+  .leadership-row {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* RH card — the one warm accent tint: --cream background, --black text,
  * per the plan's "colored section tints... use sparingly" pattern. v4.3:
  * gains the --blue top accent bar + icon that used to live on the graph's
@@ -691,6 +706,27 @@ li.orkut-scrap:last-child {
   border-top: 3px solid var(--blue);
   padding: 18px 20px;
   color: var(--black);
+}
+
+/* CEO card — same cream panel as .rh-card, but --green top accent instead
+ * of --blue, so the two leadership cards read as siblings (same shape)
+ * with distinct roles (different accent). Framed honestly: this firm has
+ * no LLM in the decision path, so the "CEO" is ceremonial by design, not
+ * a placeholder waiting for a real strategist. */
+.ceo-card {
+  background: var(--cream);
+  border: var(--border-fade);
+  border-top: 3px solid var(--green);
+  padding: 18px 20px;
+  color: var(--black);
+}
+
+.ceo-chip {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--black);
+  opacity: 0.6;
 }
 
 .rh-card-heading {
