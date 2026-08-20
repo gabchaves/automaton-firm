@@ -23,25 +23,27 @@ describe("EmpresaTab", () => {
   it("renders the RH card with the exact policy string and ciclo counters from org.history", () => {
     render(<EmpresaTab snapshot={fixtureSnapshot} />);
 
-    // v4 Task B1 also gives the org graph's RH node its own "Recursos
-    // Humanos" caption node (OrgGraph.tsx), so the text now legitimately
-    // appears twice on the page — scope this assertion to the RH card's
-    // own section title, not the graph's caption.
     expect(screen.getByText("Recursos Humanos", { selector: ".rh-card .section-title" })).toBeInTheDocument();
     expect(screen.getByText(/RH baseado em evidência/)).toBeInTheDocument();
     // 1 trader_fired + 1 trader_promoted in the fixture's org.history.
     expect(screen.getAllByText("1", { selector: ".rh-counters .v" })).toHaveLength(2);
     expect(screen.getByText("demissões no ciclo")).toBeInTheDocument();
     expect(screen.getByText("promoções no ciclo")).toBeInTheDocument();
+
+    // v4.3: RH's "unmistakable" treatment (icon + live countdown) used to
+    // live on the graph's separate RH node (removed) — it moved here, its
+    // one on-page home now.
+    expect(document.querySelector(".rh-card .org-rh-icon")).toBeInTheDocument();
+    expect(screen.getByText(/próxima avaliação em \d+h\d{2}/, { selector: ".rh-next-review" })).toBeInTheDocument();
   });
 
-  it("renders every current-generation employee as a graph node with book/status", () => {
+  it("renders every current-generation employee as a plain roster row with book/status", () => {
     render(<EmpresaTab snapshot={fixtureSnapshot} />);
 
-    // v3.1 restructured the graph into rows (live firm, live control, then
-    // a "galeria dos caídos" fallen row) instead of two cohort columns —
-    // Caue Reis (fired) now lands in the fallen row, after the two live
-    // rows, rather than staying grouped with the rest of the firm cohort.
+    // v4.3: plain tidy list, same ordering contract as the Leaderboard
+    // (row-order.ts) — live rows grouped by cohort (Ada/Beto = evolved live,
+    // Rand-7 = random live), then every closed seat at the true end
+    // (Caue Reis, fired), regardless of cohort.
     const employeeNames = Array.from(document.querySelectorAll(".org-node-name")).map(
       (el) => el.childNodes[0]?.textContent,
     );
@@ -61,35 +63,33 @@ describe("EmpresaTab", () => {
     expect(betoNode.querySelector(".org-node-cargo")).toHaveTextContent("Trader Trainee · aposta do RH");
   });
 
-  it("renders a compact, mono explainer above the graph describing how the firm is organized", () => {
+  it("renders a compact, mono explainer above the roster describing how the firm is organized", () => {
     render(<EmpresaTab snapshot={fixtureSnapshot} />);
     expect(screen.getByText(/Como a firma se organiza/)).toBeInTheDocument();
   });
 
-  it("renders the RH node top-of-graph with hrPolicy as a title tooltip", () => {
+  // v4.3: the lineage line used to be a hover-only tooltip on the graph
+  // node (`title` attribute) plus, for a bred mutation, an animated edge
+  // labeled "mutação". The graph is gone — `lineageLine`'s branch logic is
+  // unchanged, but it renders as plain visible text under each row now
+  // (see EmpresaRoster.test.tsx for the row-level unit coverage; this is
+  // just the EmpresaTab-level wiring smoke test).
+  it("renders a visible lineage line under a bred (mutação) employee's row, naming the resolved parent", () => {
     render(<EmpresaTab snapshot={fixtureSnapshot} />);
-    const rhNode = screen.getByTitle(fixtureSnapshot.org.hrPolicy);
-    expect(rhNode).toHaveTextContent("RH");
+    const betoRow = orgNodeByEmployeeName("Beto Nunes").closest(".roster-row");
+    expect(betoRow?.querySelector(".roster-row-lineage")).toHaveTextContent("↳ mutação de Ada Faria");
   });
 
-  it("draws an animated mutation lineage edge labeled \"mutação\", tooltipped with the resolved parentName", () => {
+  it("renders a visible external-hire lineage line for a null-parent, fresh-seedNote employee", () => {
     render(<EmpresaTab snapshot={fixtureSnapshot} />);
-    expect(screen.getByText("mutação")).toBeInTheDocument();
-
-    const betoNode = orgNodeByEmployeeName("Beto Nunes");
-    expect(betoNode).toHaveAttribute("title", "↳ mutação de Ada Faria");
+    const adaRow = orgNodeByEmployeeName("Ada Faria").closest(".roster-row");
+    expect(adaRow?.querySelector(".roster-row-lineage")).toHaveTextContent("↳ contratação externa (genoma novo)");
   });
 
-  it("tooltips an external-hire lineage note for a null-parent, fresh-seedNote employee", () => {
+  it("never renders a lineage line for the control cohort", () => {
     render(<EmpresaTab snapshot={fixtureSnapshot} />);
-    const adaNode = orgNodeByEmployeeName("Ada Faria");
-    expect(adaNode).toHaveAttribute("title", "↳ contratação externa (genoma novo)");
-  });
-
-  it("never tooltips a lineage note for the control cohort", () => {
-    render(<EmpresaTab snapshot={fixtureSnapshot} />);
-    const randNode = orgNodeByEmployeeName("Rand-7");
-    expect(randNode).not.toHaveAttribute("title");
+    const randRow = orgNodeByEmployeeName("Rand-7").closest(".roster-row");
+    expect(randRow?.querySelector(".roster-row-lineage")).toBeNull();
   });
 
   it("renders org.history as a compact timeline", () => {

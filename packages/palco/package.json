@@ -13,7 +13,6 @@
     "@fontsource/anton": "^5.3.0",
     "@fontsource/archivo": "^5.3.0",
     "@fontsource/geist-mono": "^5.3.0",
-    "@xyflow/react": "^12.11.3",
     "chart.js": "^4.5.1",
     "clsx": "^2.1.1",
     "framer-motion": "^13.1.0",

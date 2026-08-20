@@ -666,14 +666,42 @@ li.orkut-scrap:last-child {
 
 /* ---------- Empresa ---------- */
 
+/* Page-level rhythm for Empresa's three block-level groups (RH card,
+ * organograma/roster, histórico) — v4.3 plan: "separa um pouco mais os
+ * blocos" after three rounds of the org graph reading as crowded even
+ * after two prior fix attempts. One shared gap token instead of mismatched
+ * per-block margins; reuses the largest spacing value already established
+ * on this page pre-v4.3 (.org-graph-panel/.org-fallen-panel both used
+ * 32px) rather than inventing a new number. */
+.empresa-blocks {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
 /* RH card — the one warm accent tint: --cream background, --black text,
- * per the plan's "colored section tints... use sparingly" pattern. */
+ * per the plan's "colored section tints... use sparingly" pattern. v4.3:
+ * gains the --blue top accent bar + icon that used to live on the graph's
+ * separate RH node (OrgGraph.tsx, removed) — RH now has exactly ONE
+ * on-page home, so its "unmistakable RH" treatment moves here instead of
+ * being split across two places. */
 .rh-card {
   background: var(--cream);
   border: var(--border-fade);
+  border-top: 3px solid var(--blue);
   padding: 18px 20px;
-  margin-bottom: 28px;
   color: var(--black);
+}
+
+.rh-card-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.org-rh-icon {
+  font-size: 20px;
+  line-height: 1;
 }
 
 .rh-card .section-title {
@@ -704,6 +732,18 @@ li.orkut-scrap:last-child {
 .rh-counters .label {
   display: block;
   margin-top: 6px;
+}
+
+/* Ported from the graph's RH node (OrgGraph.tsx's RhNodeView, removed
+ * v4.3) — the live "próxima avaliação" countdown to the next 00:00 UTC,
+ * computed fresh on every render (see format.ts's
+ * hoursUntilNextUtcMidnight). */
+.rh-next-review {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--black);
+  opacity: 0.6;
+  margin: 10px 0 0;
 }
 
 .status-chip {
@@ -737,154 +777,66 @@ li.orkut-scrap:last-child {
   color: var(--lightgrey);
 }
 
-/* ---------- Empresa: org graph (v3 Task 3 — @xyflow/react) ---------- */
-
-/* Fixed-height canvas so the graph has real pan/zoom room; background
- * matches the other Empresa/Pregão panels (--black) — the page's own
- * static grain overlay (.page::after, z-index 50) still paints on top of
- * it same as every other panel, so deliberately NOT rendering xyflow's
- * <Background> component (see OrgGraph.tsx) is what "our grain shows
- * through" means here, not a transparent container.
+/* ---------- Empresa: roster (v4.3 — plain tidy list) ----------
  *
- * v4.2 Task 1: this canvas now holds ONLY the live tiers (RH + A Firma +
- * Controle, each capped at ROSTER_SIZE = 5) — "Encerrados" moved out to its
- * own plain scrollable list below (`.org-fallen-panel`), so this panel's
- * fitView zoom is bounded and legible regardless of how large Encerrados
- * grows. Height bumped from 480 to 520 to match the widened tier spacing
- * (OrgGraph.tsx) — real breathing room, not just "nothing overlaps". */
-.org-graph-panel {
-  height: 520px;
-  background: var(--black);
-  border: var(--border-fade);
+ * Replaces the xyflow org graph (three rounds of "amontoado"/crowded
+ * complaints even after two prior fix attempts to tune it — see git
+ * history on the removed OrgGraph.tsx). Back to a plain vertical list per
+ * user request ("volta com os agentes arrumadinhos em lista"): no canvas,
+ * no absolute positioning, no shared fitView zoom budget between tiers.
+ * Reuses the SAME `.org-node` card markup the graph nodes and the
+ * "Encerrados" fallen list already shared, and the SAME live/closed
+ * ordering contract as the Leaderboard tab (see `row-order.ts`). */
+
+.roster-live-block {
   margin-bottom: 32px;
 }
 
-/* "Encerrados" (dead/fired, either cohort) — v4.2 Task 1: a plain,
- * independently-scrollable card list, deliberately NOT part of the xyflow
- * canvas above. An unbounded, ever-growing row doesn't belong inside a
- * viewport that has to fit everything at once — that's what forced the
- * live tiers to shrink into illegibility pre-v4.2 (see the OrgGraph.tsx
- * module comment). `.org-fallen-list` scrolls on its own (max-height +
- * overflow-y, same pattern as `.empresa-drawer-content` below); the page
- * itself never grows or scrolls horizontally because of it. */
-.org-fallen-panel {
-  margin-bottom: 32px;
+.roster-live-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
 }
 
+.roster-section-title {
+  margin-bottom: 12px;
+}
+
+.roster-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Lineage line — "↳ mutação de X" / "↳ contratação externa" / seedNote
+ * fallback, `lineage.ts`'s `lineageLine` — rendered as plain visible text
+ * under each row again (it was a hover-only tooltip on the graph nodes;
+ * this is how it read before the graph existed at all). Indent clears the
+ * 28px avatar + `.org-node`'s own 8px gap so it lines up under the name. */
+.roster-row-lineage {
+  margin: 4px 0 0 36px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--lightgrey);
+}
+
+/* "Encerrados" (dead/fired, either cohort) — its own clearly-separated
+ * block at the very bottom, same "own tier" framing as the last round,
+ * just a plain list now instead of an `.org-fallen-panel` list next to a
+ * canvas. No max-height/scroll clamp anymore: with the graph gone, nothing
+ * forces this list to share a viewport budget with anything else, so it
+ * flows with the rest of the page like every other list here. */
 .org-fallen-header {
   font-family: var(--font-mono);
   font-size: 10px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--lightgrey);
-  opacity: 0.7; /* quieter than the live tiers' captions, same intent as the old .org-caption-node-dim */
-  margin-bottom: 10px;
-}
-
-.org-fallen-list {
-  display: flex;
-  flex-wrap: wrap;
-  align-content: flex-start;
-  gap: 12px;
-  max-height: 260px;
-  overflow-y: auto;
-  padding: 4px 4px 4px 0;
-  margin: 0;
-  list-style: none;
-}
-
-/* Each card gets the graph's own fixed node size (NODE_WIDTH/NODE_HEIGHT,
- * OrgGraph.tsx) so a fallen employee reads exactly as legibly as a live
- * one — `.org-node` itself is width/height: 100% (it normally fills an
- * xyflow node's measured box), so this `<li>` is what actually sizes it
- * here. */
-.org-fallen-item {
-  flex: 0 0 auto;
-  width: 176px;
-  height: 92px;
-}
-
-/* Re-theme xyflow via its own --xy-* custom properties (scoped to this
- * panel) rather than fighting individual .react-flow__* rules — every
- * color/shadow in dist/style.css reads through one of these tokens. */
-.org-graph-panel .react-flow {
-  --xy-edge-stroke-default: hsla(0, 0%, 100%, 0.3);
-  --xy-edge-stroke-width-default: 1;
-  --xy-edge-stroke-selected-default: var(--green);
-  --xy-edge-label-background-color-default: var(--black);
-  --xy-edge-label-color-default: var(--lightgrey);
-  --xy-attribution-background-color-default: transparent;
-  --xy-controls-button-background-color-default: var(--black);
-  --xy-controls-button-background-color-hover-default: var(--ink);
-  --xy-controls-button-color-default: var(--ink);
-  --xy-controls-button-color-hover-default: var(--bg);
-  --xy-controls-button-border-color-default: var(--border-color-fade);
-  --xy-controls-box-shadow-default: none;
-}
-
-.org-graph-panel .react-flow__attribution a {
-  font-family: var(--font-mono);
-  font-size: 9px;
-  color: var(--lightgrey);
-}
-
-/* Handles exist for edge geometry only — this is a read-only diagram, not
- * an editor, so the connection dots stay invisible. */
-.org-node-handle {
-  opacity: 0;
-}
-
-/* v3.1: RH node grew from a bare "RH" square into a small dashboard —
- * cycle counters + a live "próxima avaliação" countdown (see
- * OrgGraph.tsx's RhNodeView) — so it's column-flow now instead of a single
- * centered label. */
-/* v4 Task B1: RH gets its own unmistakable treatment — a --blue top accent
- * bar (the identity's chip-accent color, reused rather than a new token) on
- * top of the existing cream/black swap that already set it apart from the
- * black employee nodes, plus a distinct icon (`.org-rh-icon`) and its own
- * "Recursos Humanos" caption node above it (see OrgGraph.tsx's buildGraph).
- * Spatial position was never enough on its own, per the plan. */
-.org-rh-node {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  width: 100%;
-  height: 100%;
-  background: var(--cream);
-  color: var(--black);
-  border: var(--border-fade);
-  border-top: 3px solid var(--blue);
-  padding: 8px 10px;
-}
-
-.org-rh-icon {
-  font-size: 20px;
-  line-height: 1;
-}
-
-.org-rh-title {
-  font-family: var(--font-display);
-  font-size: 18px;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-}
-
-.org-rh-counters {
-  display: flex;
-  gap: 10px;
-  font-family: var(--font-mono);
-  font-size: 9.5px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  opacity: 0.85;
-}
-
-.org-rh-next {
-  font-family: var(--font-mono);
-  font-size: 9px;
   opacity: 0.7;
+  margin-bottom: 10px;
 }
 
 .org-node {
@@ -892,12 +844,10 @@ li.orkut-scrap:last-child {
   align-items: center;
   gap: 8px;
   width: 100%;
-  height: 100%;
   background: var(--black);
   border: var(--border-fade);
   border-radius: var(--radius);
   padding: 8px 10px;
-  overflow: hidden;
   cursor: pointer;
 }
 
@@ -908,26 +858,6 @@ li.orkut-scrap:last-child {
 
 .org-node-dim {
   opacity: 0.55;
-}
-
-/* Tier header captions — v3.1 introduced this for the fallen row alone
- * ("galeria dos caídos"); v4 Task B1 reused the same plain-text-node style
- * for every tier including "Encerrados". v4.2 Task 1 moved "Encerrados" out
- * of the xyflow canvas entirely (see `.org-fallen-header` below) — this is
- * now only "Recursos Humanos" / "A Firma" / "Controle", the live tiers. No
- * card chrome. */
-.org-caption-node {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  height: 100%;
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--lightgrey);
-  text-align: center;
 }
 
 .org-node-avatar {

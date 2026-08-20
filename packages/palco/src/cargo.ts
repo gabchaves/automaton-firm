@@ -131,7 +131,7 @@ export function cargoFor(input: CargoInput): Cargo {
 }
 
 /**
- * Convenience wrapper for the two call sites (OrgGraph node, Empresa
+ * Convenience wrapper for the two call sites (EmpresaRoster's row, Empresa
  * profile drawer) that already have an `Employee` plus its matching
  * leaderboard row (or null when the generation seed has no live ranking
  * entry — same join pattern the drawer already uses for the genome

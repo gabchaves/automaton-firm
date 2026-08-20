@@ -1,7 +1,7 @@
 import type { PalcoSnapshot } from "../types";
-import { relativeTime } from "../format";
+import { relativeTime, hoursUntilNextUtcMidnight } from "../format";
 import { STAKE_MC } from "../mood";
-import { OrgGraph } from "./OrgGraph";
+import { EmpresaRoster } from "./EmpresaRoster";
 
 interface EmpresaTabProps {
   snapshot: PalcoSnapshot | null;
@@ -40,17 +40,23 @@ export function EmpresaTab({ snapshot }: EmpresaTabProps) {
   const nowMs = Date.now();
   // Sane fallback (STAKE_MC) while there's no snapshot yet; every real
   // render derives from cards.traderStartMc instead, so a bankroll scale
-  // change never touches this file (or OrgGraph/EmpresaDrawer) again.
+  // change never touches this file (or EmpresaRoster/EmpresaDrawer) again.
   const stakeMc = snapshot?.cards.traderStartMc ?? STAKE_MC;
 
   const demissoes = history.filter((h) => h.type === "trader_fired").length;
   const rotacoes = history.filter((h) => h.type === "trader_rotated").length;
   const promocoes = history.filter((h) => h.type === "trader_promoted").length;
+  const { hours, minutes } = hoursUntilNextUtcMidnight(nowMs);
 
   return (
-    <div>
+    <div className="empresa-blocks">
       <section className="rh-card">
-        <h2 className="section-title">Recursos Humanos</h2>
+        <div className="rh-card-heading">
+          <span className="org-rh-icon" aria-hidden="true">
+            🗂️
+          </span>
+          <h2 className="section-title">Recursos Humanos</h2>
+        </div>
         <p className="rh-policy">{org?.hrPolicy ?? ""}</p>
         <div className="rh-counters">
           <div>
@@ -66,25 +72,24 @@ export function EmpresaTab({ snapshot }: EmpresaTabProps) {
             <span className="label">rotações no ciclo</span>
           </div>
         </div>
+        <p className="rh-next-review">
+          próxima avaliação em {hours}h{String(minutes).padStart(2, "0")}
+        </p>
       </section>
 
-      <h2 className="section-title">Organograma</h2>
-      <p className="org-explainer">
-        Como a firma se organiza: o RH avalia todo mundo semanalmente contra o benchmark. Sêniores herdam genomas de
-        elite; trainees são apostas do RH no meio do ciclo; o grupo de controle joga moeda — e nos mantém honestos.
-      </p>
-      {employees.length === 0 ? (
-        <p className="empty-state">Sem funcionários ainda.</p>
-      ) : (
-        <OrgGraph
-          employees={employees}
-          hrPolicy={org?.hrPolicy ?? ""}
-          leaderboard={snapshot?.leaderboard ?? []}
-          demissoes={demissoes}
-          promocoes={promocoes}
-          stakeMc={stakeMc}
-        />
-      )}
+      <div className="roster-block">
+        <h2 className="section-title">Organograma</h2>
+        <p className="org-explainer">
+          Como a firma se organiza: o RH avalia todo mundo semanalmente contra o benchmark. Sêniores herdam genomas
+          de elite; trainees são apostas do RH no meio do ciclo; o grupo de controle joga moeda — e nos mantém
+          honestos.
+        </p>
+        {employees.length === 0 ? (
+          <p className="empty-state">Sem funcionários ainda.</p>
+        ) : (
+          <EmpresaRoster employees={employees} leaderboard={snapshot?.leaderboard ?? []} stakeMc={stakeMc} />
+        )}
+      </div>
 
       <section className="org-history">
         <h2 className="section-title">Histórico</h2>

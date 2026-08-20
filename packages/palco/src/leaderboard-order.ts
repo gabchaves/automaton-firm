@@ -1,4 +1,5 @@
 import type { PalcoSnapshot } from "./types";
+import { orderRowsByStatus } from "./row-order";
 
 export type LeaderboardEntry = PalcoSnapshot["leaderboard"][number];
 
@@ -23,13 +24,6 @@ export function isLiveRankedRow(row: DisplayRow): row is RankedRow & { rank: num
   return !isDividerRow(row) && row.status === "live" && row.rank !== null;
 }
 
-// Explicit tiers within a cohort: vivo=0, demitido=1, morto=2. The backend's
-// `computeLeaderboard` (src/motor/palco-data.ts) already orders by
-// `cohort, status != 'live', book_mc DESC`, but that boolean comparison
-// treats fired and dead as the same tier — this re-sorts with the finer
-// tiering the Leaderboard tab actually wants.
-const STATUS_PRIORITY: Record<string, number> = { live: 0, fired: 1, dead: 2 };
-
 /**
  * v4.1 fix: "joga os demitidos pro final da lista" meant the END OF THE
  * WHOLE TABLE, not just the end of their own cohort's block. The previous
@@ -44,39 +38,26 @@ const STATUS_PRIORITY: Record<string, number> = { live: 0, fired: 1, dead: 2 };
  * from BOTH cohorts together (fired before dead, book desc within each
  * tier) at the true bottom of the list. Rank numbers (#1, #2, ...) are
  * assigned only to live rows, counted continuously.
+ *
+ * v4.3: the cohort/status grouping itself is now `row-order.ts`'s
+ * `orderRowsByStatus`, shared with Empresa's roster list — this function's
+ * own job shrinks to rank assignment, id generation, and the divider row,
+ * which are Leaderboard-table-specific (Empresa's roster has no `rank`
+ * concept and renders its divider as a plain "Encerrados" section header
+ * instead of a synthetic table row).
  */
 export function orderLeaderboardRows(entries: LeaderboardEntry[]): DisplayRow[] {
-  const cohortOrder: string[] = [];
-  for (const entry of entries) {
-    if (!cohortOrder.includes(entry.cohort)) cohortOrder.push(entry.cohort);
-  }
+  const { live, closed } = orderRowsByStatus(entries);
 
   const out: DisplayRow[] = [];
-  let liveRank = 0;
 
-  for (const cohort of cohortOrder) {
-    const liveEntries = entries
-      .filter((entry) => entry.cohort === cohort && entry.status === "live")
-      .slice()
-      .sort((a, b) => b.bookMc - a.bookMc);
+  live.forEach((entry, index) => {
+    out.push({ ...entry, rank: index + 1, id: `${entry.cohort}-live-${entry.genNumber}-${entry.name}-${index}` });
+  });
 
-    liveEntries.forEach((entry, index) => {
-      liveRank += 1;
-      out.push({ ...entry, rank: liveRank, id: `${cohort}-live-${entry.genNumber}-${entry.name}-${index}` });
-    });
-  }
-
-  const closedEntries = entries
-    .filter((entry) => entry.status !== "live")
-    .slice()
-    .sort((a, b) => {
-      const priorityDiff = (STATUS_PRIORITY[a.status] ?? 1) - (STATUS_PRIORITY[b.status] ?? 1);
-      return priorityDiff !== 0 ? priorityDiff : b.bookMc - a.bookMc;
-    });
-
-  if (closedEntries.length > 0) {
+  if (closed.length > 0) {
     out.push({ id: "divider-encerrados", isDivider: true, cohort: null });
-    closedEntries.forEach((entry, index) => {
+    closed.forEach((entry, index) => {
       out.push({ ...entry, rank: null, id: `closed-${entry.cohort}-${entry.genNumber}-${entry.name}-${index}` });
     });
   }
