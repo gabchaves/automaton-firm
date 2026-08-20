@@ -712,12 +712,64 @@ li.orkut-scrap:last-child {
  * static grain overlay (.page::after, z-index 50) still paints on top of
  * it same as every other panel, so deliberately NOT rendering xyflow's
  * <Background> component (see OrgGraph.tsx) is what "our grain shows
- * through" means here, not a transparent container. */
+ * through" means here, not a transparent container.
+ *
+ * v4.2 Task 1: this canvas now holds ONLY the live tiers (RH + A Firma +
+ * Controle, each capped at ROSTER_SIZE = 5) — "Encerrados" moved out to its
+ * own plain scrollable list below (`.org-fallen-panel`), so this panel's
+ * fitView zoom is bounded and legible regardless of how large Encerrados
+ * grows. Height bumped from 480 to 520 to match the widened tier spacing
+ * (OrgGraph.tsx) — real breathing room, not just "nothing overlaps". */
 .org-graph-panel {
-  height: 480px;
+  height: 520px;
   background: var(--black);
   border: var(--border-fade);
   margin-bottom: 32px;
+}
+
+/* "Encerrados" (dead/fired, either cohort) — v4.2 Task 1: a plain,
+ * independently-scrollable card list, deliberately NOT part of the xyflow
+ * canvas above. An unbounded, ever-growing row doesn't belong inside a
+ * viewport that has to fit everything at once — that's what forced the
+ * live tiers to shrink into illegibility pre-v4.2 (see the OrgGraph.tsx
+ * module comment). `.org-fallen-list` scrolls on its own (max-height +
+ * overflow-y, same pattern as `.empresa-drawer-content` below); the page
+ * itself never grows or scrolls horizontally because of it. */
+.org-fallen-panel {
+  margin-bottom: 32px;
+}
+
+.org-fallen-header {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--lightgrey);
+  opacity: 0.7; /* quieter than the live tiers' captions, same intent as the old .org-caption-node-dim */
+  margin-bottom: 10px;
+}
+
+.org-fallen-list {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 12px;
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 4px 4px 4px 0;
+  margin: 0;
+  list-style: none;
+}
+
+/* Each card gets the graph's own fixed node size (NODE_WIDTH/NODE_HEIGHT,
+ * OrgGraph.tsx) so a fallen employee reads exactly as legibly as a live
+ * one — `.org-node` itself is width/height: 100% (it normally fills an
+ * xyflow node's measured box), so this `<li>` is what actually sizes it
+ * here. */
+.org-fallen-item {
+  flex: 0 0 auto;
+  width: 176px;
+  height: 92px;
 }
 
 /* Re-theme xyflow via its own --xy-* custom properties (scoped to this
@@ -827,10 +879,11 @@ li.orkut-scrap:last-child {
 }
 
 /* Tier header captions — v3.1 introduced this for the fallen row alone
- * ("galeria dos caídos"); v4 Task B1 reuses the same plain-text-node style
- * for EVERY tier ("Recursos Humanos" / "A Firma" / "Controle" /
- * "Encerrados"), since spatial grouping alone doesn't count as a clear
- * header per the plan. No card chrome. */
+ * ("galeria dos caídos"); v4 Task B1 reused the same plain-text-node style
+ * for every tier including "Encerrados". v4.2 Task 1 moved "Encerrados" out
+ * of the xyflow canvas entirely (see `.org-fallen-header` below) — this is
+ * now only "Recursos Humanos" / "A Firma" / "Controle", the live tiers. No
+ * card chrome. */
 .org-caption-node {
   display: flex;
   align-items: center;
@@ -843,13 +896,6 @@ li.orkut-scrap:last-child {
   text-transform: uppercase;
   color: var(--lightgrey);
   text-align: center;
-}
-
-/* Encerrados' header is muted to match its row's own 55%-opacity
- * treatment (`.org-node-dim`) — still a real, readable header, just quieter
- * than "A Firma"/"Controle" the same way the row under it is quieter. */
-.org-caption-node-dim {
-  opacity: 0.7;
 }
 
 .org-node-avatar {
