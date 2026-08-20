@@ -1371,7 +1371,7 @@ ul.history-timeline li {
 
 .agent-pnl-table th {
   text-align: left;
-  color: var(--blue);
+  color: var(--ink);
   font-size: 9.5px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
