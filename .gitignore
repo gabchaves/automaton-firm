@@ -15,6 +15,9 @@ dist
 # Generated reports & run artifacts (dashboards write here; see scripts/*-dashboard.mjs)
 reports/
 
+# Isolated backtest DBs + sweep logs/results (scripts/backtest*.mjs) — never the live motor.db
+.backtest/
+
 # Lineage/stats sidecars written next to the runs
 evolution-lineage.jsonl
 carry-lineage.jsonl

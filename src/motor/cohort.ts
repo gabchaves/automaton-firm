@@ -14,6 +14,7 @@ import type { Genome } from "../trading/genome.js";
 import { genomeWantsLong } from "../trading/genome-decider.js";
 import { mulberry32 } from "../trading/deciders.js";
 import { traderName } from "./names.js";
+import { BAR_MS } from "./feed.js";
 import type { MotorEventDraft } from "./events.js";
 
 export const ROSTER_SIZE = 5;
@@ -60,9 +61,27 @@ export function hashSeed(...parts: number[]): number {
   return parts.reduce((acc, p) => (acc * 1_000_003 + (p >>> 0) * 9_973) >>> 0, 17);
 }
 
-/** Pure function of (seed, ts): a coin flip that never desyncs across restarts. */
-export function randomWantsLong(deciderSeed: number, ts: number): boolean {
-  return mulberry32(hashSeed(deciderSeed, ts % 2_147_483_647))() < 0.5;
+/**
+ * Pure function of (seed, ts, cooldownBars): a coin flip that never desyncs
+ * across restarts.
+ *
+ * `cooldownBars` buckets `ts` onto a coarser grid so the flip only changes
+ * once every `cooldownBars` bars, instead of every single 5m bar. Measured
+ * bug this fixes: an unconditional per-bar flip made the random cohort
+ * re-decide direction ~every bar, which — combined with leverage and
+ * per-trade fees — mechanically shreds its capital regardless of market
+ * direction (a 90-day backtest sweep measured ~11x more trades than the
+ * evolved cohort and 85%+ fee losses on every random trader). That is not a
+ * defensible no-skill baseline; it is a baseline nearly guaranteed to lose,
+ * which inflates any comparison against it. Callers pass the trader's own
+ * `minHoldBars` gene as the cooldown — the same bound the patience gene
+ * already draws from and that both cohorts already sample identically — so
+ * this closes the gap without introducing a new tunable constant.
+ */
+export function randomWantsLong(deciderSeed: number, ts: number, cooldownBars: number): boolean {
+  const bucketMs = Math.max(1, cooldownBars) * BAR_MS;
+  const bucketTs = Math.floor(ts / bucketMs) * bucketMs;
+  return mulberry32(hashSeed(deciderSeed, bucketTs % 2_147_483_647))() < 0.5;
 }
 
 export function traderEquityMc(t: TraderRuntime, closeBySymbol: Map<string, number>): number {
@@ -227,7 +246,7 @@ function decideWantLong(
 ): boolean {
   return t.cohort === "evolved"
     ? genomeWantsLong(history, history.length - 1, t.genome)
-    : randomWantsLong(t.deciderSeed, ts);
+    : randomWantsLong(t.deciderSeed, ts, t.genome.minHoldBars + 1);
 }
 
 function buildStepEvents(

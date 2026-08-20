@@ -337,3 +337,77 @@ First measurement on the same 8-day replay window, same market:
 The control's fivefold improvement is the finding: **the losses were fees, not
 signals**. Patience does not create an edge — it stops paying for its absence,
 and it lifts the honest baseline the firm has to beat far higher than before.
+
+## Robustness sweep + a second control bug (2026-08-20, live era)
+
+**Question:** a single 90-day backtest of the live `motor` system (`src/motor`,
+the genome/HR machinery that also drives Palco — distinct from the
+CEO/carry-strategist system Experiments 1–6 tested) measured the firm beating
+the random control by ~0.3% over the period, ~1.2%/year annualized. Does that
+hold up on windows the genome never saw, or was it one lucky draw?
+
+**Setup:** `scripts/backtest-sweep.mjs` replays `tick()` — the exact same
+deterministic pipeline, no logic duplicated — across 6 **disjoint** 90-day
+windows (~1.5 years, non-overlapping so each is an independent draw), fixed
+before any run executed. Two metrics reported per window: peak equity (the
+"recorde geral" backtest.mjs already printed) and final equity at window end
+(equity_snapshots), because peak is a running-maximum statistic that flatters
+whichever cohort had more chances to spike.
+
+**Result 1 — the original number does not replicate:**
+
+| Window | Period | peak-edge |
+|---|---|---|
+| W5 | 2025-02-26 → 05-27 | −3.01% |
+| W4 | 2025-05-27 → 08-25 | +0.53% |
+| W3 | 2025-08-25 → 11-23 | −8.16% |
+| W2 | 2025-11-23 → 2026-02-21 | +7.57% |
+| W1 | 2026-02-21 → 05-22 | +1.72% |
+| W0 (the original window) | 2026-05-22 → 08-20 | −0.74% |
+
+Mean −0.35% per period (~−1.4%/year), std dev 4.76pp, firm wins 3/6 (50% —
+a coin flip). **No robust edge.** Consistent with every prior experiment in
+this document.
+
+**Result 2 — final-equity showed a much bigger, and bogus, "edge":** firm beat
+control on final equity in **100% of windows**, by +36% to +68% each — too
+large and too uniform to be real. Traced it to the actual trade log: in one
+window the evolved cohort traded 587 times over 90 days; the random control
+traded **6,705 times** (11.4x). The control's decision rule was a coin flip on
+literally every 5-minute bar it was flat — with leverage and 10bps-per-leg
+fees, that mechanically shreds capital regardless of market direction. Every
+random trader in that window ended at 0.4%–13% of its starting book. Both
+cohorts *lost* money in absolute terms; the firm just bled slower, because
+genome signals (momentum/reversion/breakout crossovers) are naturally sparse
+while a per-bar coin flip is not. Same mechanism Experiment 5 found once
+already ("~90% of the measured skill was cost discipline, not prediction"),
+reappearing bigger here because final-equity accumulates it over a full
+window instead of netting out at a peak.
+
+**Fix:** `randomWantsLong` (`src/motor/cohort.ts`) now buckets `ts` so the
+coin only re-flips once every `minHoldBars + 1` bars, instead of every bar —
+reusing the trader's own patience gene as the cooldown rather than adding a
+new tunable constant. Both cohorts already sample `minHoldBars` from the same
+bounds; this just closes the gap where it only throttled exits, never entries.
+
+| | before fix | after fix |
+|---|---|---|
+| final-edge (mean/window) | +62.24% (~252%/yr) | **+36.13%** (~147%/yr) |
+| final-edge win rate | 100% | 100% |
+| trades, one window (firm vs control) | 587 vs 6,705 (11.4x) | 587 vs 1,995 (3.4x) |
+| control's final book, that window | $59.60 of $1,000 | **$330.11** of $1,000 |
+| peak-edge mean | −0.97% (~−3.9%/yr), 67% win | −0.35% (~−1.4%/yr), 50% win |
+
+The fix roughly halved the fee-churn artifact and made it more consistent
+(std dev 5.6pp → 2.9pp) — but did not zero it out, because even throttled,
+a coin flip still re-decides more often than sparse technical signals do.
+Going further would mean picking a cooldown to make the number smaller,
+which is the self-deception this document exists to avoid — so it stops here,
+reusing an existing, already-validated bound instead of tuning a new one.
+
+**Finding:** the peak-edge metric, which was never exposed to this bug,
+barely moved (−0.97% → −0.35%, still a coin-flip win rate). **The headline
+verdict is unchanged: no robust directional edge.** What changed is that the
+live random control is now a meaningfully more honest baseline going forward
+— it no longer wins by construction against any strategy that simply trades
+less often than it does.

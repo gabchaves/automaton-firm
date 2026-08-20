@@ -35,11 +35,62 @@ describe("seedGeneration", () => {
     expect(runtime.traders[2].genome).not.toEqual(p1);
   });
 
-  test("random cohort decisions are pure functions of (seed, ts)", () => {
-    expect(randomWantsLong(9, 300_000)).toBe(randomWantsLong(9, 300_000));
-    const flips = Array.from({ length: 200 }, (_, i) => randomWantsLong(9, i * 300_000));
+  test("random cohort decisions are pure functions of (seed, ts, cooldownBars)", () => {
+    expect(randomWantsLong(9, 300_000, 1)).toBe(randomWantsLong(9, 300_000, 1));
+    const flips = Array.from({ length: 200 }, (_, i) => randomWantsLong(9, i * 300_000, 1));
     expect(flips.some(Boolean)).toBe(true);
     expect(flips.some((f) => !f)).toBe(true);
+  });
+
+  // Measured bug: a fresh coin flip every 5m bar (cooldownBars=1, the old
+  // unconditional behavior) makes the "random" cohort re-decide ~every bar,
+  // which combined with leverage + fees mechanically shreds its capital
+  // regardless of market direction (a 90-day sweep measured ~11x more trades
+  // than the evolved cohort and 85%+ fee losses on every random trader) —
+  // not a fair no-skill baseline. cooldownBars throttles the re-flip rate
+  // using the trader's own minHoldBars gene, the same bound already proven
+  // safe for the patience gene, instead of a new tunable constant.
+  describe("randomWantsLong cooldown", () => {
+    test("holds the same decision for every bar inside one cooldown window", () => {
+      const cooldownBars = 5;
+      const first = randomWantsLong(9, 10 * 300_000, cooldownBars);
+      for (let i = 1; i < cooldownBars; i++) {
+        expect(randomWantsLong(9, (10 + i) * 300_000, cooldownBars)).toBe(first);
+      }
+    });
+
+    test("can flip once the next cooldown window starts", () => {
+      const cooldownBars = 3;
+      const seeds = Array.from({ length: 50 }, (_, k) => k);
+      const anyFlipAcrossWindows = seeds.some((seed) => {
+        const windowA = randomWantsLong(seed, 0, cooldownBars);
+        const windowB = randomWantsLong(seed, cooldownBars * 300_000, cooldownBars);
+        return windowA !== windowB;
+      });
+      expect(anyFlipAcrossWindows).toBe(true);
+    });
+
+    test("cooldownBars=1 reproduces the historical every-bar flip", () => {
+      const flips = Array.from({ length: 50 }, (_, i) => randomWantsLong(9, i * 300_000, 1));
+      // Every-bar flip must NOT be constant — otherwise cooldown=1 is silently
+      // behaving like some larger window (a regression this test would miss).
+      expect(new Set(flips).size).toBe(2);
+    });
+
+    test("a larger cooldown produces materially fewer decision changes over a fixed span", () => {
+      const bars = 400;
+      const countChanges = (cooldownBars: number) => {
+        let changes = 0;
+        let prev = randomWantsLong(9, 0, cooldownBars);
+        for (let i = 1; i < bars; i++) {
+          const cur = randomWantsLong(9, i * 300_000, cooldownBars);
+          if (cur !== prev) changes++;
+          prev = cur;
+        }
+        return changes;
+      };
+      expect(countChanges(25)).toBeLessThan(countChanges(1));
+    });
   });
 });
 

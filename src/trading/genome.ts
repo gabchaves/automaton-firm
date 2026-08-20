@@ -28,7 +28,9 @@ export interface Genome {
   // Patience gene: bars a position must stay open before an exit signal is
   // honored (0 = today's behavior, exit fires immediately). Liquidation and
   // forceClose (HR firing/rotation) always ignore this — see
-  // directional-step.ts/cohort.ts's stepOneTrader.
+  // directional-step.ts/cohort.ts's stepOneTrader. Also reused, random-cohort
+  // only, as the cooldown between direction re-flips (cohort.ts's
+  // randomWantsLong) — the same bound, not a second tunable constant.
   minHoldBars: number; // integer 0..24
 }
 
