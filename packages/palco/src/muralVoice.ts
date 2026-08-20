@@ -4,8 +4,10 @@
  * humor sharpened toward the established "darwinismo com CNPJ imaginário"
  * voice in v4's Task B2 — trade_closed's win/loss pools grew again to 8
  * variants each in the v4.2 round, since trade_closed is the highest-
- * frequency event type by far). `pickBody` selects one line from a fixed
- * per-event-type pool using `rng`; callers seed that rng from
+ * frequency event type by far; v4.6 round raised every remaining 4-variant
+ * pool to 6, and trade_closed's win/loss/liquidated pools to 10/10/6, per
+ * user feedback that posts were repeating too visibly). `pickBody` selects
+ * one line from a fixed per-event-type pool using `rng`; callers seed it from
  * `mulberry32(eventId)` (see rng.ts), so the SAME feed item always renders
  * the SAME joke, forever — no Math.random, matching this codebase's
  * "seeded, never Math.random" rule.
@@ -51,6 +53,8 @@ function tradeClosedBody(payload: Record<string, unknown>, rng: Rng): string {
       `A alavancagem dá, a alavancagem tira. ${symbol} tirou.`,
       `Seleção natural, capítulo alavancagem: ${symbol} venceu essa rodada.`,
       `Rekt em ${symbol}. O mercado não lê currículo genético.`,
+      `Call de margem em ${symbol}. A corretora não aceita desculpa evolutiva.`,
+      `Zerado por alavancagem em ${symbol}. Aula cara, mensalidade em dólar.`,
     ]);
   }
 
@@ -65,6 +69,8 @@ function tradeClosedBody(payload: Record<string, unknown>, rng: Rng): string {
       `${symbol} pagou bem hoje: ${pnlStr} garantidos, sem estresse extra pro genoma.`,
       `Fechamento redondo em ${symbol}: ${pnlStr}. Não é sorte, é seleção natural funcionando.`,
       `${pnlStr} de saldo positivo em ${symbol}. O book agradece, o genoma se gaba.`,
+      `${symbol} no azul: ${pnlStr}. O genoma tira uma folga hoje.`,
+      `Saiu com ${pnlStr} de ${symbol}. A planilha do RH vai adorar essa linha.`,
     ]);
   }
 
@@ -78,6 +84,8 @@ function tradeClosedBody(payload: Record<string, unknown>, rng: Rng): string {
     `${pnlStr} em ${symbol}: o mercado corrigiu meu excesso de confiança.`,
     `Perda de ${pnlStr} em ${symbol}. O genoma anota e segue — evidência é evidência.`,
     `${pnlStr} no vermelho em ${symbol}. Fica pro próximo ciclo de avaliação.`,
+    `${pnlStr} em ${symbol}. Nem toda mutação vinga.`,
+    `Saldo negativo de ${pnlStr} em ${symbol}: dado registrado, ego ferido.`,
   ]);
 }
 
@@ -89,6 +97,8 @@ function traderDiedBody(payload: Record<string, unknown>, rng: Rng): string {
     `${name} lutou até o último centavo. O mercado foi mais forte. 🕯️`,
     `É com pesar que a firma comunica: ${name} zerou. O genoma segue vivo nas próximas gerações.`,
     `${name} não resistiu a ${age} de volatilidade. Os pêsames já saem em nome da seleção natural.`,
+    `${name} chegou a zero depois de ${age} no mercado. O CNPJ imaginário guarda um minuto de silêncio.`,
+    `Book de ${name} zerou em ${age}. A seleção natural não manda cartão de pêsames, só atualiza a planilha.`,
   ]);
 }
 
@@ -100,6 +110,8 @@ function traderFiredBody(payload: Record<string, unknown>, rng: Rng): string {
     `O RH agradece os serviços de ${name}. Os dados não mentem; infelizmente, também não perdoam.`,
     `${name} foi desligado(a) com ${returned} de saldo devolvido. Sem drama: é darwinismo com CNPJ imaginário.`,
     `Fim de linha pra ${name}: ${returned} de volta pro caixa. A planilha de evidências não teve pena.`,
+    `${name} não sobreviveu à avaliação. Devolveu ${returned}, levou a experiência.`,
+    `Encerramos com ${name}: ${returned} de volta ao caixa. Sem ressentimento, só evidência.`,
   ]);
 }
 
@@ -110,6 +122,8 @@ function traderHiredBody(payload: Record<string, unknown>, rng: Rng): string {
     `${name} entrou pra firma. Mesa nova, book zerado, esperança no máximo.`,
     `Novo CNPJ imaginário na folha: ${name}. Que a seleção natural seja gentil.`,
     `${name} assinou o contrato genético. Bem-vindo(a) à fila da avaliação semanal.`,
+    `${name} bateu o ponto pela primeira vez. Genoma cru, ambição no talo.`,
+    `Chegou ${name}: mesa nova, planilha de avaliação já de olho.`,
   ]);
 }
 
@@ -120,6 +134,8 @@ function traderPromotedBody(payload: Record<string, unknown>, rng: Rng): string 
     `Promoção pra ${name}! Bateu o benchmark — que neste mercado é quase poesia.`,
     `${name} subiu de posto. A evidência favoreceu, o RH aplaudiu.`,
     `Reconhecimento oficial pra ${name}: melhor genoma do ciclo, sem discussão.`,
+    `${name} vira case de sucesso do ciclo. Sem festa, só resultado.`,
+    `${name} garantiu o topo do ranking. O RH já está de olho pro próximo review.`,
   ]);
 }
 
@@ -131,6 +147,8 @@ function achievementBody(payload: Record<string, unknown>, rng: Rng): string {
     `Conquista nova na parede de ${name}: '${label}'.`,
     `${name} cravou '${label}'. Mais uma linha bonita na ficha genética.`,
     `Placar atualizado: ${name} garantiu '${label}'.`,
+    `${name} coleciona mais uma: '${label}'. A ficha genética engorda.`,
+    `Registro novo pra ${name}: '${label}'. Uma linha a mais na lenda da mesa.`,
   ]);
 }
 
@@ -141,6 +159,8 @@ function recordBrokenBody(payload: Record<string, unknown>, rng: Rng): string {
     `Novo teto: ${peak}. O gráfico de recordes agradece o degrau.`,
     `${peak} no topo da história. A firma evoluiu de novo, com CNPJ e tudo.`,
     `Recorde batido: ${peak}. O eletrocardiograma do experimento deu um pulo.`,
+    `${peak}: o número que ninguém tinha visto ainda. A firma respira fundo e segue.`,
+    `Marca histórica: ${peak}. Vale print pra guardar de recordação.`,
   ]);
 }
 
@@ -151,6 +171,8 @@ function genStartedBody(payload: Record<string, unknown>, rng: Rng): string {
     `Geração ${n} aberta. Herdaram os melhores genes — e todas as dívidas emocionais dos antecessores.`,
     `Novo CNPJ imaginário fundado: Geração ${n}. Que a seleção natural comece.`,
     `Geração ${n} no ar. Genoma fresco, book cheio, relógio da avaliação já correndo.`,
+    `Geração ${n} começa do zero, como sempre. O relógio da avaliação já está correndo.`,
+    `Abertura da Geração ${n}: livro contábil zerado, esperança no talo.`,
   ]);
 }
 
@@ -163,6 +185,8 @@ function genEndedBody(payload: Record<string, unknown>, rng: Rng): string {
     `A Geração ${n} fecha as portas com pico de ${peak}. O que era gene bom virou herança.`,
     `Geração ${n} encerrada após ${days} dias: pico de ${peak}. Extinção com dignidade.`,
     `${days} dias de Geração ${n}, pico ${peak}. O funeral é rápido; a herança genética, não.`,
+    `Encerrada a Geração ${n}, pico ${peak}. A próxima já herdou o que deu certo.`,
+    `${days} dias depois, a Geração ${n} fecha com ${peak} de pico. Passou rápido pra uma população inteira.`,
   ]);
 }
 
@@ -174,6 +198,8 @@ function hrReviewBody(payload: Record<string, unknown>, rng: Rng): string {
     `Fechamos o ciclo: ${fired} fora, ${promoted} promovido(s). Tudo baseado em evidência, nada em achismo.`,
     `Relatório do RH: ${fired} desligamento(s) e ${promoted} promoção(ões) neste ciclo. A planilha manda.`,
     `Avaliação encerrada: ${fired} saíram, ${promoted} subiram. Seleção natural com ata assinada.`,
+    `RH bateu o martelo: ${fired} saída(s), ${promoted} subida(s) neste ciclo. Nada de achismo, só planilha.`,
+    `Balanço do ciclo: ${fired} desligamento(s), ${promoted} promoção(ões). A avaliação semanal não tira férias.`,
   ]);
 }
 
@@ -188,6 +214,8 @@ function traderRotatedBody(payload: Record<string, unknown>, rng: Rng): string {
     `${name} saiu sem vermelho no histórico — e sem histórico. A firma precisa de evidência, não de mistério.`,
     `Cadeira de ${name} girou por falta de evidência, não por falta de resultado. Ninguém foi julgado aqui.`,
     `Rotação de ${name}: pouca evidência pra qualquer veredito. O RH só girou a cadeira, não deu nota.`,
+    `${name} girou de cadeira por falta de dado, não por falta de resultado. O RH só não teve o que julgar ainda.`,
+    `Rodízio de ${name}: sem trades o bastante pra virar evidência. A cadeira muda, o veredito não existe.`,
   ]);
 }
 
@@ -241,7 +269,7 @@ const REPRESENTATIVE_PAYLOAD: Record<string, Record<string, unknown>> = {
  * Task B2: "every pool has >= 4 variants") instead of hardcoding each
  * pool's literal contents in the test file, which would duplicate this
  * module and drift the moment a line's wording changes. */
-export function poolSizeFor(type: string, maxProbe = 8): number {
+export function poolSizeFor(type: string, maxProbe = 12): number {
   const payload = REPRESENTATIVE_PAYLOAD[type];
   if (!payload) return 0;
   const seen = new Set<string>();

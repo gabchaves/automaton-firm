@@ -81,6 +81,10 @@ export function EmpresaTab({ snapshot }: EmpresaTabProps) {
                   <span className="v">{usd(ceo.bookMc)}</span>
                   <span className="label">sob gestão</span>
                 </div>
+                <div>
+                  <span className={ceo.realizedPnlMc < 0 ? "v pnl-neg" : "v pnl-pos"}>{usd(ceo.realizedPnlMc)}</span>
+                  <span className="label">lucro realizado</span>
+                </div>
               </div>
               <p className="rh-next-review">
                 O cargo muda de mãos toda vez que alguém supera — sem herança, sem política interna.

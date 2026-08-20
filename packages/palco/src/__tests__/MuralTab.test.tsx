@@ -49,9 +49,11 @@ describe("MuralTab", () => {
     expect(screen.getByText("📈 Lucro em destaque")).toBeInTheDocument();
     // $1.50 (fixture id 50) is above this fixture's $0.20 individual-post
     // threshold (2% of cards.genStartMc = 1_000_000) — mulberry32(50)
-    // deterministically picks this exact pool line (v4.2's 8-variant win
+    // deterministically picks this exact pool line (v4.6's 10-variant win
     // pool shifted the index; still the same deterministic pick per id).
-    expect(screen.getByText("Bati o mercado em BTCUSDT: $1.50. CNPJ imaginário, resultado real.")).toBeInTheDocument();
+    expect(
+      screen.getByText("BTCUSDT pagou bem hoje: $1.50 garantidos, sem estresse extra pro genoma."),
+    ).toBeInTheDocument();
   });
 
   it("derives the small-trade threshold from cards.genStartMc: the fixture's $1.50 win clears its $0.20 threshold as an individual post, while the small ETHUSDT pair (well under it) still collapses into one grouped resumo", () => {
@@ -85,9 +87,11 @@ describe("MuralTab", () => {
   it("renders a trader_fired post authored by RH, with a humanized body and the quoted reason", () => {
     render(<MuralTab snapshot={fixtureSnapshot} />);
     expect(screen.getByText("📦 Desligamento")).toBeInTheDocument();
-    // mulberry32(49) deterministically picks this exact pool line.
+    // mulberry32(49) deterministically picks this exact pool line (v4.6's
+    // 6-variant fired pool shifted the index; still the same deterministic
+    // pick per id).
     expect(
-      screen.getByText("O RH agradece os serviços de Caue Reis. Os dados não mentem; infelizmente, também não perdoam."),
+      screen.getByText("Caue Reis foi desligado(a) com $0.80 de saldo devolvido. Sem drama: é darwinismo com CNPJ imaginário."),
     ).toBeInTheDocument();
     expect(screen.getByText("underperformance sustentada")).toBeInTheDocument();
     // RH is the post's author, not the fired employee.
@@ -177,7 +181,7 @@ describe("MuralTab", () => {
 
     expect(firstRun).toBeTruthy();
     expect(firstRun).toBe(secondRun);
-    expect(firstRun).toContain("Bati o mercado em BTCUSDT: $1.50. CNPJ imaginário, resultado real.");
+    expect(firstRun).toContain("BTCUSDT pagou bem hoje: $1.50 garantidos, sem estresse extra pro genoma.");
   });
 
   it("renders the reactions footer as decorative Orkut-style phrases, deterministically across two separate renders", () => {
@@ -279,9 +283,9 @@ describe("MuralTab — rotação de cadeira", () => {
     // Never framed as a firing: the joke "comunidades" box legitimately
     // contains the word, so scope the check to the post headline itself.
     expect(screen.queryByText("📦 Desligamento")).toBeNull();
-    // v4's expanded (4-variant) pool always names the ABSENCE of evidence
-    // explicitly (see muralVoice.ts's traderRotatedBody), so this holds
-    // regardless of which of the 4 lines mulberry32(99) actually picks —
+    // v4's expanded pool (6 variants as of v4.6) always names the ABSENCE
+    // of evidence explicitly (see muralVoice.ts's traderRotatedBody), so
+    // this holds regardless of which line mulberry32(99) actually picks —
     // and none of them reach for verdict/performance language.
     const rotationPost = screen.getByText("🔄 Rotação de cadeira").closest("li.orkut-scrap");
     expect(rotationPost?.textContent).toMatch(/evidência/i);

@@ -41,9 +41,12 @@ describe("EmpresaTab", () => {
     render(<EmpresaTab snapshot={fixtureSnapshot} />);
 
     expect(screen.getByText("CEO", { selector: ".ceo-card .section-title" })).toBeInTheDocument();
-    // Ada Faria: evolved, live, bookMc 700_000 — the highest book among the fixture's live evolved traders.
+    // Ada Faria: evolved, live, bookMc 700_000, realizedPnlMc 120_000 — the
+    // highest book among the fixture's live evolved traders.
     expect(screen.getByText("Ada Faria", { selector: ".ceo-name" })).toBeInTheDocument();
     expect(screen.getByText("$7.00", { selector: ".ceo-card .rh-counters .v" })).toBeInTheDocument();
+    expect(screen.getByText("$1.20", { selector: ".ceo-card .rh-counters .v.pnl-pos" })).toBeInTheDocument();
+    expect(screen.getByText("lucro realizado")).toBeInTheDocument();
     expect(screen.getByText(/Eleito pelo mercado, não por currículo/)).toBeInTheDocument();
     expect(screen.getByText(/muda de mãos toda vez que alguém supera/)).toBeInTheDocument();
   });

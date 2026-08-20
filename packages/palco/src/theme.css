@@ -743,7 +743,12 @@ li.orkut-scrap:last-child {
   line-height: 1;
 }
 
-.rh-card .section-title {
+/* Bug fix: this used to be scoped to .rh-card only, so .ceo-card's
+ * "CEO" heading fell through to the global .section-title's --ink color
+ * (built for dark panels) on a --cream background — nearly invisible.
+ * Both cream-panel cards need the black override. */
+.rh-card .section-title,
+.ceo-card .section-title {
   color: var(--black);
 }
 
@@ -771,6 +776,16 @@ li.orkut-scrap:last-child {
 .rh-counters .label {
   display: block;
   margin-top: 6px;
+}
+
+/* CEO card's "lucro realizado" stat — same red/green-by-sign convention
+ * used everywhere else, overriding .rh-counters .v's default black. */
+.rh-counters .v.pnl-pos {
+  color: var(--green);
+}
+
+.rh-counters .v.pnl-neg {
+  color: var(--red);
 }
 
 /* Ported from the graph's RH node (OrgGraph.tsx's RhNodeView, removed
