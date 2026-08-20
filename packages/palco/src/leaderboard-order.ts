@@ -10,7 +10,7 @@ export interface RankedRow extends LeaderboardEntry {
 export interface DividerRow {
   id: string;
   isDivider: true;
-  cohort: string;
+  cohort: null; // one shared divider for the whole closed-seats block, no single cohort owns it
 }
 
 export type DisplayRow = RankedRow | DividerRow;
@@ -31,16 +31,19 @@ export function isLiveRankedRow(row: DisplayRow): row is RankedRow & { rank: num
 const STATUS_PRIORITY: Record<string, number> = { live: 0, fired: 1, dead: 2 };
 
 /**
- * Cinto e suspensório (v4 plan, Task A3): dead/fired seats must never
- * outrank a live one, even when their book is higher — re-sorted here
- * explicitly on the client instead of trusting the backend's ordering to
- * survive every future change untested. Within each cohort (grouped in the
- * order cohorts first appear in `entries`, matching the backend's own
- * cohort grouping): live rows first (book desc), then fired (book desc),
- * then dead (book desc). A single divider marker is inserted right before
- * the first non-live row of a cohort section, only when that cohort
- * actually has one. Rank numbers (#1, #2, ...) are assigned only to live
- * rows, counted continuously across the whole ordered list.
+ * v4.1 fix: "joga os demitidos pro final da lista" meant the END OF THE
+ * WHOLE TABLE, not just the end of their own cohort's block. The previous
+ * version demoted a fired trader only within its cohort — since cohorts are
+ * displayed one after another (all Firma rows, then all Controle rows), a
+ * Firma seat closed out mid-table still landed ABOVE every live Controle
+ * row, which reads as "stuck in the middle," not "at the end."
+ *
+ * Two passes now: every LIVE row first (still grouped by cohort in the
+ * order cohorts first appear, book desc within each — the team-grouped
+ * display people already know), THEN one divider, THEN every non-live row
+ * from BOTH cohorts together (fired before dead, book desc within each
+ * tier) at the true bottom of the list. Rank numbers (#1, #2, ...) are
+ * assigned only to live rows, counted continuously.
  */
 export function orderLeaderboardRows(entries: LeaderboardEntry[]): DisplayRow[] {
   const cohortOrder: string[] = [];
@@ -52,28 +55,29 @@ export function orderLeaderboardRows(entries: LeaderboardEntry[]): DisplayRow[] 
   let liveRank = 0;
 
   for (const cohort of cohortOrder) {
-    const cohortEntries = entries
-      .filter((entry) => entry.cohort === cohort)
+    const liveEntries = entries
+      .filter((entry) => entry.cohort === cohort && entry.status === "live")
       .slice()
-      .sort((a, b) => {
-        const priorityDiff = (STATUS_PRIORITY[a.status] ?? 1) - (STATUS_PRIORITY[b.status] ?? 1);
-        return priorityDiff !== 0 ? priorityDiff : b.bookMc - a.bookMc;
-      });
+      .sort((a, b) => b.bookMc - a.bookMc);
 
-    let dividerInserted = false;
-    cohortEntries.forEach((entry, index) => {
-      if (!dividerInserted && entry.status !== "live") {
-        out.push({ id: `divider-${cohort}`, isDivider: true, cohort });
-        dividerInserted = true;
-      }
+    liveEntries.forEach((entry, index) => {
+      liveRank += 1;
+      out.push({ ...entry, rank: liveRank, id: `${cohort}-live-${entry.genNumber}-${entry.name}-${index}` });
+    });
+  }
 
-      const isLive = entry.status === "live";
-      if (isLive) liveRank += 1;
-      out.push({
-        ...entry,
-        rank: isLive ? liveRank : null,
-        id: `${cohort}-${entry.genNumber}-${entry.name}-${index}`,
-      });
+  const closedEntries = entries
+    .filter((entry) => entry.status !== "live")
+    .slice()
+    .sort((a, b) => {
+      const priorityDiff = (STATUS_PRIORITY[a.status] ?? 1) - (STATUS_PRIORITY[b.status] ?? 1);
+      return priorityDiff !== 0 ? priorityDiff : b.bookMc - a.bookMc;
+    });
+
+  if (closedEntries.length > 0) {
+    out.push({ id: "divider-encerrados", isDivider: true, cohort: null });
+    closedEntries.forEach((entry, index) => {
+      out.push({ ...entry, rank: null, id: `closed-${entry.cohort}-${entry.genNumber}-${entry.name}-${index}` });
     });
   }
 
