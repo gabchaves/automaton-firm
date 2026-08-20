@@ -232,7 +232,7 @@ describe("MuralTab", () => {
     expect(karmaBadges.length).toBe(10); // one per post, same count as "scraps (10)"
   });
 
-  it("expands the visitor counter into a 'visitas recentes' line with 2-3 names from the known trader roster, clearly labeled decorative", () => {
+  it("expands the visitor counter into a 'visitas recentes' line with 2-3 names from the known trader roster", () => {
     render(<MuralTab snapshot={fixtureSnapshot} />);
     const line = screen.getByText(/visitas recentes:/);
     expect(line).toBeInTheDocument();
@@ -241,7 +241,6 @@ describe("MuralTab", () => {
     const mentioned = knownNames.filter((name) => line.textContent?.includes(name));
     expect(mentioned.length).toBeGreaterThanOrEqual(2);
     expect(mentioned.length).toBeLessThanOrEqual(3);
-    expect(screen.getByText(/decorativo/)).toBeInTheDocument();
   });
 
   it("renders the same 'visitas recentes' names deterministically across two separate renders", () => {

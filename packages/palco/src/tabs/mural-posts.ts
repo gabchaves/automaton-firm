@@ -15,13 +15,36 @@
  * are untouched by that pass; they're still decided right here.
  */
 import type { PalcoSnapshot } from "../types";
+import type { Employee } from "../lineage";
 import { usd } from "../format";
 import { mulberry32 } from "../rng";
 import { pickBody, signedUsd } from "../muralVoice";
+import { cargoForEmployee } from "../cargo";
 
 // Exported so MuralTab.tsx can type the older pages it fetches from
 // GET /api/feed (v4.2 Task 2b) without re-deriving the same shape.
 export type FeedItem = PalcoSnapshot["feed"][number];
+
+type LeaderboardEntry = PalcoSnapshot["leaderboard"][number];
+
+/**
+ * Real cargo (job title) for a trader-authored post — same computation
+ * Empresa's roster/drawer already use (cargo.ts's cargoForEmployee), so a
+ * post says the same thing about someone that their own profile does,
+ * instead of a generic "Trader" placeholder.
+ *
+ * Returns null when the trader can't be resolved: `employees` only covers
+ * the CURRENT (unended) generation's roster (see palco-data.ts), so a post
+ * from an older, already-ended generation legitimately has no match here —
+ * callers fall back to a generic cargo in that case, never a crash or a
+ * fabricated title.
+ */
+function cargoTituloFor(name: string, employees: Employee[], leaderboard: LeaderboardEntry[]): string | null {
+  const employee = employees.find((e) => e.name === name);
+  if (!employee) return null;
+  const leaderboardEntry = leaderboard.find((entry) => entry.traderId === employee.traderId) ?? null;
+  return cargoForEmployee(employee, leaderboardEntry).titulo;
+}
 
 export interface MuralAuthor {
   name: string;
@@ -125,7 +148,7 @@ function addToGroupedTrade(acc: GroupAccumulator, item: FeedItem): void {
   acc.post.body = groupedTradeBody(acc.count, acc.netPnlMc);
 }
 
-function buildEventPost(item: FeedItem): MuralPost {
+function buildEventPost(item: FeedItem, employees: Employee[], leaderboard: LeaderboardEntry[]): MuralPost {
   const p = item.payload;
   const rng = mulberry32(item.id);
   const base = { key: `event-${item.id}`, ts: item.ts, memberIds: [item.id], reactionSeed: item.id };
@@ -135,9 +158,16 @@ function buildEventPost(item: FeedItem): MuralPost {
       const pnl = num(p, "realizedPnlMc");
       const symbol = symbolOf(item);
       const win = pnl > 0;
+      // traderName comes from palco-data.ts's LEFT JOIN (trade_closed's own
+      // payload only ever carries symbol/price/pnl, never who traded it) —
+      // absent for events older than this enrichment, or a resolution
+      // edge case, so both the name and cargo fall back to the symbol.
+      const traderName = str(p, "traderName", "");
+      const name = traderName || symbol;
+      const cargo = traderName ? cargoTituloFor(traderName, employees, leaderboard) : null;
       return {
         ...base,
-        author: { name: symbol, cargo: `Trader · Mesa ${symbol}` },
+        author: { name, cargo: cargo ?? `Trader · Mesa ${symbol}` },
         headline: win ? "📈 Lucro em destaque" : "📉 Perda no book",
         body: pickBody("trade_closed", p, rng),
         includeSad: false,
@@ -148,7 +178,7 @@ function buildEventPost(item: FeedItem): MuralPost {
       const name = str(p, "name", "Novo trader");
       return {
         ...base,
-        author: { name, cargo: "Trader" },
+        author: { name, cargo: cargoTituloFor(name, employees, leaderboard) ?? "Trader" },
         headline: "🤝 Nova contratação",
         body: pickBody("trader_hired", p, rng),
         includeSad: false,
@@ -179,7 +209,7 @@ function buildEventPost(item: FeedItem): MuralPost {
       const name = str(p, "name", "Trader");
       return {
         ...base,
-        author: { name, cargo: "Trader" },
+        author: { name, cargo: cargoTituloFor(name, employees, leaderboard) ?? "Trader" },
         headline: "🕯️ Nota de falecimento (do book)",
         body: pickBody("trader_died", p, rng),
         includeSad: true,
@@ -189,7 +219,7 @@ function buildEventPost(item: FeedItem): MuralPost {
       const name = str(p, "name", "Trader");
       return {
         ...base,
-        author: { name, cargo: "Trader" },
+        author: { name, cargo: cargoTituloFor(name, employees, leaderboard) ?? "Trader" },
         headline: "🏆 Promoção",
         body: pickBody("trader_promoted", p, rng),
         includeSad: false,
@@ -199,7 +229,7 @@ function buildEventPost(item: FeedItem): MuralPost {
       const name = str(p, "name", "Trader");
       return {
         ...base,
-        author: { name, cargo: "Trader" },
+        author: { name, cargo: cargoTituloFor(name, employees, leaderboard) ?? "Trader" },
         headline: "✨ Conquista desbloqueada",
         body: pickBody("achievement", p, rng),
         includeSad: false,
@@ -274,8 +304,18 @@ function buildEventPost(item: FeedItem): MuralPost {
  * `genStartMc` defaults to `DEFAULT_GEN_START_MC` so callers that haven't
  * loaded a snapshot yet (or existing call sites) still get a sane
  * threshold; MuralTab.tsx passes the live `snapshot.cards.genStartMc`.
+ *
+ * `employees`/`leaderboard` (both default to []) resolve a real cargo
+ * (job title) for trader-authored posts via cargoTituloFor — same values
+ * MuralTab.tsx already reads for its "visitas recentes" line and passes
+ * straight from `snapshot.org.employees`/`snapshot.leaderboard`.
  */
-export function buildMuralPosts(feed: FeedItem[], genStartMc: number = DEFAULT_GEN_START_MC): MuralPost[] {
+export function buildMuralPosts(
+  feed: FeedItem[],
+  genStartMc: number = DEFAULT_GEN_START_MC,
+  employees: Employee[] = [],
+  leaderboard: LeaderboardEntry[] = [],
+): MuralPost[] {
   const smallTradeThresholdMc = genStartMc / SMALL_TRADE_DIVISOR;
   const posts: MuralPost[] = [];
   const groupsBySymbol = new Map<string, GroupAccumulator>();
@@ -297,7 +337,7 @@ export function buildMuralPosts(feed: FeedItem[], genStartMc: number = DEFAULT_G
       continue;
     }
 
-    posts.push(buildEventPost(item));
+    posts.push(buildEventPost(item, employees, leaderboard));
   }
 
   return posts;

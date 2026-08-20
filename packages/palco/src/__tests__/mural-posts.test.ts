@@ -3,6 +3,7 @@ import { buildMuralPosts } from "../tabs/mural-posts";
 import type { PalcoSnapshot } from "../types";
 
 type FeedItem = PalcoSnapshot["feed"][number];
+type Employee = PalcoSnapshot["org"]["employees"][number];
 
 function tradeClosed(id: number, symbol: string, realizedPnlMc: number): FeedItem {
   return {
@@ -11,6 +12,45 @@ function tradeClosed(id: number, symbol: string, realizedPnlMc: number): FeedIte
     type: "trade_closed",
     html: "",
     payload: { symbol, realizedPnlMc, feeMc: 10, liquidated: false },
+  };
+}
+
+function tradeClosedByTrader(id: number, symbol: string, realizedPnlMc: number, traderName: string): FeedItem {
+  return {
+    id,
+    ts: 1_700_000_000_000 + id,
+    type: "trade_closed",
+    html: "",
+    payload: { symbol, realizedPnlMc, feeMc: 10, liquidated: false, traderName },
+  };
+}
+
+function traderHired(id: number, name: string): FeedItem {
+  return {
+    id,
+    ts: 1_700_000_000_000 + id,
+    type: "trader_hired",
+    html: "",
+    payload: { name, slot: 0, stakeMc: 200_000, parentTraderId: null },
+  };
+}
+
+function employee(overrides: Partial<Employee> = {}): Employee {
+  return {
+    traderId: "t-zeca",
+    name: "Zeca Prado",
+    cohort: "evolved",
+    slot: 0,
+    status: "live",
+    bookMc: 500_000,
+    symbol: "BTCUSDT",
+    leverage: 2,
+    bornAt: 1_700_000_000_000,
+    diedAt: null,
+    parentTraderId: null,
+    parentName: null,
+    seedNote: "fresh", // -> cargoFor's baseCargo: "Trader Júnior · contratação externa"
+    ...overrides,
   };
 }
 
@@ -55,5 +95,51 @@ describe("buildMuralPosts — small-trade threshold derivation (v4 Task B2)", ()
     // proving the threshold moves with the fixture, not a fixed dollar figure.
     const atLargeScale = buildMuralPosts([tradeClosed(4, "ETHUSDT", pnlMc)], 10_000_000);
     expect(atLargeScale[0].headline).toBe("🔁 Resumo da mesa ETHUSDT");
+  });
+});
+
+describe("buildMuralPosts — real name + cargo for trader-authored posts", () => {
+  const GEN_START_MC = 1_000_000; // 2% threshold = $0.02, any pnl below easily clears it
+
+  it("resolves a trade_closed post's author to the real trader (from palco-data.ts's traderName enrichment) and their real cargo, not the symbol", () => {
+    const posts = buildMuralPosts(
+      [tradeClosedByTrader(1, "BTCUSDT", 50_000, "Zeca Prado")],
+      GEN_START_MC,
+      [employee({ name: "Zeca Prado" })],
+      [],
+    );
+
+    expect(posts[0].author).toEqual({ name: "Zeca Prado", cargo: "Trader Júnior · contratação externa" });
+  });
+
+  it("falls back to the symbol-based author when trade_closed has no traderName (event predates the enrichment)", () => {
+    const posts = buildMuralPosts([tradeClosed(2, "BTCUSDT", 50_000)], GEN_START_MC, [employee()], []);
+
+    expect(posts[0].author).toEqual({ name: "BTCUSDT", cargo: "Trader · Mesa BTCUSDT" });
+  });
+
+  it("keeps the real trader name but degrades cargo gracefully when traderName doesn't match any current-generation employee", () => {
+    // employees only covers the CURRENT (unended) generation — a post from
+    // an older, already-ended generation legitimately has no match.
+    const posts = buildMuralPosts(
+      [tradeClosedByTrader(3, "ETHUSDT", 50_000, "Ghost Trader")],
+      GEN_START_MC,
+      [employee({ name: "Zeca Prado" })], // roster doesn't include "Ghost Trader"
+      [],
+    );
+
+    expect(posts[0].author).toEqual({ name: "Ghost Trader", cargo: "Trader · Mesa ETHUSDT" });
+  });
+
+  it("resolves a trader_hired post's cargo from the matching employee instead of the generic 'Trader' placeholder", () => {
+    const posts = buildMuralPosts([traderHired(4, "Zeca Prado")], GEN_START_MC, [employee({ name: "Zeca Prado" })], []);
+
+    expect(posts[0].author).toEqual({ name: "Zeca Prado", cargo: "Trader Júnior · contratação externa" });
+  });
+
+  it("falls back to the generic 'Trader' cargo when no employees are passed at all (buildMuralPosts's default params)", () => {
+    const posts = buildMuralPosts([traderHired(5, "Zeca Prado")], GEN_START_MC);
+
+    expect(posts[0].author).toEqual({ name: "Zeca Prado", cargo: "Trader" });
   });
 });

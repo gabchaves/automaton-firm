@@ -446,19 +446,12 @@ footer.honesty p {
 
 /* "visitas recentes" — v4 Task B2's Orkut escalation of the visitor
  * counter above. Names are real (pulled from the current generation's
- * roster, see recentVisitorNames in MuralTab.tsx); only the "visiting"
- * framing is decorative, called out inline via `.orkut-decorative-tag`
- * rather than left implicit. */
+ * roster, see recentVisitorNames in MuralTab.tsx). */
 .orkut-recent-visitors {
   margin: 0 0 10px;
   text-align: right;
   font-size: 11px;
   color: #5a6b85;
-}
-
-.orkut-decorative-tag {
-  color: #8a97ab;
-  font-style: italic;
 }
 
 /* Fun-pass addendum's decorative "comunidades" box — 3 fixed joke

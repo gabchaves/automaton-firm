@@ -387,24 +387,34 @@ interface RawFeedRow {
   ts: number;
   type: string;
   payload_json: string;
+  // Only populated by computeFeed/fetchFeedPage's LEFT JOIN — the trade
+  // event types (trade_opened/trade_closed) carry a trader_id but no name
+  // in their own payload, unlike every trader_* event type which already
+  // has payload.name. computeOrgHistory's query never selects this (its
+  // event types don't need it), so it's undefined there.
+  trader_name?: string | null;
 }
 
 /** Shared row -> feed-item mapper: parses the stored payload JSON and
  * formats the pre-escaped PT html via formatEventPt, the exact shape every
  * feed-like array (`feed`, `org.history`, and `fetchFeedPage`'s pages)
  * carries. Centralized so a formatting/escaping change only has one call
- * site to touch. */
+ * site to touch. Enriches the payload with `traderName` when the row's
+ * join resolved one (see RawFeedRow.trader_name) — additive only, so
+ * formatEventPt (which reads specific known keys per type) is unaffected. */
 function mapFeedRow(row: RawFeedRow): PalcoSnapshot["feed"][number] {
-  const payload = JSON.parse(row.payload_json) as Record<string, unknown>;
+  const parsed = JSON.parse(row.payload_json) as Record<string, unknown>;
+  const payload = row.trader_name != null ? { ...parsed, traderName: row.trader_name } : parsed;
   return { id: row.id, ts: row.ts, type: row.type, html: formatEventPt(row.type, payload), payload };
 }
 
 function computeFeed(raw: BetterSqlite3.Database): PalcoSnapshot["feed"] {
   const rows = raw
     .prepare(
-      `SELECT id, ts, type, payload_json FROM events
-       WHERE type NOT IN ('motor_started', 'motor_stopped')
-       ORDER BY id DESC LIMIT ?`,
+      `SELECT e.id AS id, e.ts AS ts, e.type AS type, e.payload_json AS payload_json, t.name AS trader_name
+       FROM events e LEFT JOIN traders t ON t.id = e.trader_id
+       WHERE e.type NOT IN ('motor_started', 'motor_stopped')
+       ORDER BY e.id DESC LIMIT ?`,
     )
     .all(FEED_LIMIT) as RawFeedRow[];
 
@@ -424,9 +434,10 @@ export function fetchFeedPage(
 ): PalcoSnapshot["feed"] {
   const rows = raw
     .prepare(
-      `SELECT id, ts, type, payload_json FROM events
-       WHERE type NOT IN ('motor_started', 'motor_stopped') AND id < ?
-       ORDER BY id DESC LIMIT ?`,
+      `SELECT e.id AS id, e.ts AS ts, e.type AS type, e.payload_json AS payload_json, t.name AS trader_name
+       FROM events e LEFT JOIN traders t ON t.id = e.trader_id
+       WHERE e.type NOT IN ('motor_started', 'motor_stopped') AND e.id < ?
+       ORDER BY e.id DESC LIMIT ?`,
     )
     .all(opts.beforeId, opts.limit) as RawFeedRow[];
 

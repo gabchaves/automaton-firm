@@ -96,8 +96,16 @@ export function MuralTab({ snapshot }: MuralTabProps) {
   // after it can never reintroduce a duplicate.
   const combinedFeed = useMemo(() => [...feed, ...olderItems], [feed, olderItems]);
   const genStartMc = snapshot?.cards.genStartMc;
-  const posts = useMemo(() => buildMuralPosts(combinedFeed, genStartMc), [combinedFeed, genStartMc]);
   const employees = snapshot?.org.employees ?? [];
+  const leaderboard = snapshot?.leaderboard ?? [];
+  const posts = useMemo(
+    () => buildMuralPosts(combinedFeed, genStartMc, employees, leaderboard),
+    // employees/leaderboard are fresh array references every poll even when
+    // unchanged — keying off length (same reasoning as recentVisitors below)
+    // avoids rebuilding every post on every render for no reason.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [combinedFeed, genStartMc, employees.length, leaderboard.length],
+  );
   const lastEventId = snapshot?.lastEventId ?? 0;
   const recentVisitors = useMemo(
     () => recentVisitorNames(employees, lastEventId),
@@ -155,10 +163,7 @@ export function MuralTab({ snapshot }: MuralTabProps) {
         <p className="orkut-visitor-counter">você é o visitante nº {visitorNumber(lastEventId)}</p>
 
         {recentVisitors.length > 0 && (
-          <p className="orkut-recent-visitors">
-            visitas recentes: {recentVisitors.join(", ")}{" "}
-            <span className="orkut-decorative-tag">(decorativo — ninguém está de fato batendo ponto aqui)</span>
-          </p>
+          <p className="orkut-recent-visitors">visitas recentes: {recentVisitors.join(", ")}</p>
         )}
 
         <div className="orkut-communities">

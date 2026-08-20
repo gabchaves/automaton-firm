@@ -258,6 +258,35 @@ describe("buildSnapshot: feed", () => {
     expect(snap.feed[0].html).toBe("⏪ catch-up de 7 barras");
   });
 
+  test("a trade_closed event's payload gets enriched with traderName (Mural attributes trades to a real trader, not just the symbol)", () => {
+    const d = fresh();
+    d.insertGeneration(generationRow({ id: "g1" }));
+    d.insertTrader(traderRow({ id: "e1", generationId: "g1", name: "Zeca Prado" }));
+    d.insertEvent({
+      ts: 5, type: "trade_closed", traderId: "e1", generationId: "g1",
+      payloadJson: JSON.stringify({ symbol: "BTCUSDT", priceCents: 6_000_000, realizedPnlMc: 50_000, feeMc: 10, liquidated: false }),
+    });
+
+    const snap = buildSnapshot(d.raw, 0);
+
+    expect(snap.feed[0].payload.traderName).toBe("Zeca Prado");
+    // Enrichment is additive only — the original payload fields are untouched.
+    expect(snap.feed[0].payload.symbol).toBe("BTCUSDT");
+  });
+
+  test("a trade_closed event with no matching trader row (or trader_id null) gets no traderName key at all — never a fabricated name", () => {
+    const d = fresh();
+    d.insertGeneration(generationRow({ id: "g1" }));
+    d.insertEvent({
+      ts: 5, type: "trade_closed", traderId: "ghost", generationId: "g1",
+      payloadJson: JSON.stringify({ symbol: "ETHUSDT", priceCents: 300_000, realizedPnlMc: -20_000, feeMc: 10, liquidated: false }),
+    });
+
+    const snap = buildSnapshot(d.raw, 0);
+
+    expect("traderName" in snap.feed[0].payload).toBe(false);
+  });
+
   test("lastEventId is the max event id across all events, including excluded types", () => {
     const d = fresh();
     d.insertGeneration(generationRow({ id: "g1" }));
