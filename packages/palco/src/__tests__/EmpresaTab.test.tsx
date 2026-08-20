@@ -40,15 +40,17 @@ describe("EmpresaTab", () => {
   it("renders the CEO card as whoever currently leads the book — Ada Faria in the fixture — not a vacant seat", () => {
     render(<EmpresaTab snapshot={fixtureSnapshot} />);
 
-    // "CEO" is now a small role kicker, not the card's headline — the
-    // headline slot belongs to the name (Ada Faria), matching RH's
-    // one-headline pattern.
-    expect(screen.getByText("CEO", { selector: ".ceo-kicker" })).toBeInTheDocument();
+    // "CEO" is now a small role kicker (the site's plain .label chip), not
+    // the card's headline — the headline slot belongs to the name (Ada
+    // Faria), matching RH's one-headline pattern.
+    expect(screen.getByText("CEO", { selector: ".ceo-card .label" })).toBeInTheDocument();
     // Ada Faria: evolved, live, bookMc 700_000, realizedPnlMc 120_000,
-    // tradesCount 14 — the highest book among the fixture's live evolved traders.
+    // tradesCount 14 — the highest book among the fixture's live evolved
+    // traders. All three counters are plain (no red/green by sign) —
+    // matching RH's own counters, which never colored by sign either.
     expect(screen.getByText("Ada Faria", { selector: ".ceo-name.section-title" })).toBeInTheDocument();
     expect(screen.getByText("$7.00", { selector: ".ceo-card .rh-counters .v" })).toBeInTheDocument();
-    expect(screen.getByText("$1.20", { selector: ".ceo-card .rh-counters .v.pnl-pos" })).toBeInTheDocument();
+    expect(screen.getByText("$1.20", { selector: ".ceo-card .rh-counters .v" })).toBeInTheDocument();
     expect(screen.getByText("14", { selector: ".ceo-card .rh-counters .v" })).toBeInTheDocument();
     expect(screen.getByText("lucro realizado")).toBeInTheDocument();
     expect(screen.getByText("trades no ciclo")).toBeInTheDocument();

@@ -708,41 +708,41 @@ li.orkut-scrap:last-child {
   color: var(--black);
 }
 
-/* CEO card — its own tint, not RH's cream: reusing --cream for both made
- * the paired leadership row read as two identical beige boxes (user
- * feedback). --pink was reserved as theme.css's "rare tint" and had no
- * other home — a natural fit for the one card on the page meant to feel
- * like a spotlight, not a filing cabinet. Same shape as .rh-card (border/
- * padding/black text), --green top accent instead of --blue. The seat
- * isn't vacant: it's held by whoever's winning right now (see
- * EmpresaTab.tsx's pickCeo) — .ceo-name carries that name with the same
- * weight .section-title gives every other headline on the page. */
+/* CEO card — third attempt: RH's cream made the pair look like two
+ * identical beige boxes; a --pink tint was still "a color someone chose,"
+ * disconnected from the rest of the page. User's call: stop inventing new
+ * tints and just use the site's own established palette (grey/green/ink/
+ * blue) — so this is a plain --black panel, same family as every other
+ * panel on the page (.hero-card, .org-node, .org-history), differentiated
+ * from RH only by its --green top accent (RH keeps --blue). No new color
+ * introduced; nothing to like or dislike, it just belongs here now. */
 .ceo-card {
-  background: var(--pink);
+  background: var(--black);
   border: var(--border-fade);
   border-top: 3px solid var(--green);
   padding: 18px 20px;
-  color: var(--black);
+  color: var(--ink);
 }
 
 /* .ceo-name also carries .section-title (className="ceo-name section-title")
  * so the card's ONE true headline — the current CEO's name, not the role
- * label — gets the exact same weight/size as RH's "Recursos Humanos"
- * headline. Only spacing is overridden here. */
+ * label — gets the exact same weight as RH's "Recursos Humanos" headline;
+ * .section-title's global default (--ink) is already correct on this dark
+ * panel, so only spacing needs overriding here. */
 .ceo-name {
   margin: 2px 0 8px;
 }
 
-/* "CEO" itself is demoted to a small kicker (role tag), same idea as a
- * hero-card's .label sitting above its big .v value — the name earns the
- * headline treatment, the role doesn't need to repeat it. */
-.ceo-kicker {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--black);
-  opacity: 0.6;
+/* Body copy inside .ceo-card needs the light-panel .rh-policy/.rh-next-review
+ * rules re-colored for a dark background — those rules hardcode --black for
+ * RH's cream panel. .rh-counters .v likewise: plain --ink, matching RH's
+ * own counters (which are plain, not colored by sign) rather than singling
+ * out "lucro realizado" with red/green — that read as a value judgment the
+ * card shouldn't be making. */
+.ceo-card .rh-policy,
+.ceo-card .rh-next-review,
+.ceo-card .rh-counters .v {
+  color: var(--ink);
 }
 
 .rh-card-heading {
@@ -756,12 +756,11 @@ li.orkut-scrap:last-child {
   line-height: 1;
 }
 
-/* Bug fix: this used to be scoped to .rh-card only, so .ceo-card's
- * "CEO" heading fell through to the global .section-title's --ink color
- * (built for dark panels) on a --cream background — nearly invisible.
- * Both cream-panel cards need the black override. */
-.rh-card .section-title,
-.ceo-card .section-title {
+/* RH's cream panel needs this override (.section-title's global default,
+ * --ink, is built for dark panels and is nearly invisible on --cream).
+ * .ceo-card is a --black panel now, so it doesn't need this — the global
+ * --ink default is already correct there. */
+.rh-card .section-title {
   color: var(--black);
 }
 
@@ -789,16 +788,6 @@ li.orkut-scrap:last-child {
 .rh-counters .label {
   display: block;
   margin-top: 6px;
-}
-
-/* CEO card's "lucro realizado" stat — same red/green-by-sign convention
- * used everywhere else, overriding .rh-counters .v's default black. */
-.rh-counters .v.pnl-pos {
-  color: var(--green);
-}
-
-.rh-counters .v.pnl-neg {
-  color: var(--red);
 }
 
 /* Ported from the graph's RH node (OrgGraph.tsx's RhNodeView, removed

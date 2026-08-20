@@ -70,7 +70,7 @@ export function EmpresaTab({ snapshot }: EmpresaTabProps) {
             <span className="org-rh-icon" aria-hidden="true">
               🧬
             </span>
-            <span className="ceo-kicker">CEO</span>
+            <span className="label">CEO</span>
           </div>
           {ceo ? (
             <>
@@ -86,7 +86,7 @@ export function EmpresaTab({ snapshot }: EmpresaTabProps) {
                   <span className="label">sob gestão</span>
                 </div>
                 <div>
-                  <span className={ceo.realizedPnlMc < 0 ? "v pnl-neg" : "v pnl-pos"}>{usd(ceo.realizedPnlMc)}</span>
+                  <span className="v">{usd(ceo.realizedPnlMc)}</span>
                   <span className="label">lucro realizado</span>
                 </div>
                 <div>
