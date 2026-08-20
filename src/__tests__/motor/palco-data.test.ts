@@ -466,30 +466,34 @@ describe("buildSnapshot: pregao windowed trades + win rate", () => {
   });
 });
 
-describe("buildSnapshot: pregao bySymbol24h", () => {
-  test("groups evolved trade_closed events by symbol within 24h; all three symbols always present, evolved-only, window-bounded", () => {
+describe("buildSnapshot: pregao byAgent24h", () => {
+  test("groups evolved trade_closed events by trader within 24h; splits pnl1h out of the 24h total; evolved-only, sorted pnl24h desc, absent traders (no trades) never appear", () => {
     const d = fresh();
     const nowMs = 200_000_000;
     d.insertGeneration(generationRow({ id: "g1", cohort: "evolved", genNumber: 1, startedAt: 0, endedAt: null }));
     d.insertGeneration(generationRow({ id: "gr1", cohort: "random", genNumber: 1, startedAt: 0, endedAt: null }));
-    d.insertTrader(traderRow({ id: "e1", generationId: "g1", cohort: "evolved" }));
-    d.insertTrader(traderRow({ id: "r1", generationId: "gr1", cohort: "random" }));
+    d.insertTrader(traderRow({ id: "e1", generationId: "g1", cohort: "evolved", name: "Ada Faria" }));
+    d.insertTrader(traderRow({ id: "e2", generationId: "g1", slot: 1, cohort: "evolved", name: "Beto Nunes" }));
+    d.insertTrader(traderRow({ id: "e3", generationId: "g1", slot: 2, cohort: "evolved", name: "Sem Trades" }));
+    d.insertTrader(traderRow({ id: "r1", generationId: "gr1", cohort: "random", name: "Rand-1" }));
 
-    d.insertEvent(tradeClosedEvent({ ts: nowMs, traderId: "e1", generationId: "g1", symbol: "BTCUSDT", realizedPnlMc: 50_000 }));
-    d.insertEvent(tradeClosedEvent({ ts: nowMs - 1000, traderId: "e1", generationId: "g1", symbol: "BTCUSDT", realizedPnlMc: -10_000 }));
-    d.insertEvent(tradeClosedEvent({ ts: nowMs - 2000, traderId: "e1", generationId: "g1", symbol: "ETHUSDT", realizedPnlMc: 7_000 }));
-    // Outside the 24h window — must not be folded into BTCUSDT's total.
-    d.insertEvent(tradeClosedEvent({ ts: nowMs - DAY_MS - 1_000, traderId: "e1", generationId: "g1", symbol: "BTCUSDT", realizedPnlMc: 999_999 }));
-    // Random cohort — must not leak into the (evolved-only) bySymbol24h.
-    d.insertEvent(tradeClosedEvent({ ts: nowMs, traderId: "r1", generationId: "gr1", symbol: "SOLUSDT", realizedPnlMc: 1_000_000 }));
+    // Ada: one trade inside the last hour (+50_000), one trade 2h ago (-10_000)
+    // -> pnl1hMc=50_000, pnl24hMc=40_000, trades24h=2.
+    d.insertEvent(tradeClosedEvent({ ts: nowMs, traderId: "e1", generationId: "g1", realizedPnlMc: 50_000 }));
+    d.insertEvent(tradeClosedEvent({ ts: nowMs - 2 * HOUR_MS, traderId: "e1", generationId: "g1", realizedPnlMc: -10_000 }));
+    // Beto: one trade 3h ago -> pnl1hMc=0 (outside the 1h window), pnl24hMc=7_000.
+    d.insertEvent(tradeClosedEvent({ ts: nowMs - 3 * HOUR_MS, traderId: "e2", generationId: "g1", realizedPnlMc: 7_000 }));
+    // Outside the 24h window entirely — must not appear for Ada at all.
+    d.insertEvent(tradeClosedEvent({ ts: nowMs - DAY_MS - 1_000, traderId: "e1", generationId: "g1", realizedPnlMc: 999_999 }));
+    // Random cohort — must not leak into the (evolved-only) byAgent24h.
+    d.insertEvent(tradeClosedEvent({ ts: nowMs, traderId: "r1", generationId: "gr1", realizedPnlMc: 1_000_000 }));
 
     const snap = buildSnapshot(d.raw, nowMs);
 
-    expect(snap.pregao.bySymbol24h).toEqual([
-      { symbol: "BTCUSDT", pnlMc: 40_000, trades: 2 }, // 50_000 - 10_000
-      { symbol: "ETHUSDT", pnlMc: 7_000, trades: 1 },
-      { symbol: "SOLUSDT", pnlMc: 0, trades: 0 }, // no evolved trades on this symbol -> present at zero
-    ]);
+    expect(snap.pregao.byAgent24h).toEqual([
+      { traderId: "e1", name: "Ada Faria", pnl1hMc: 50_000, pnl24hMc: 40_000, trades24h: 2 },
+      { traderId: "e2", name: "Beto Nunes", pnl1hMc: 0, pnl24hMc: 7_000, trades24h: 1 },
+    ]); // sorted pnl24h desc; "Sem Trades" (e3) never appears — no trades in the window
   });
 });
 
@@ -500,10 +504,6 @@ describe("buildSnapshot: pregao zero-history fallback", () => {
 
     expect(snap.pregao.evolved).toEqual({ pnl1hMc: 0, pnl24hMc: 0, trades1h: 0, trades24h: 0, winRate24h: 0 });
     expect(snap.pregao.random).toEqual({ pnl1hMc: 0, pnl24hMc: 0, trades1h: 0, trades24h: 0, winRate24h: 0 });
-    expect(snap.pregao.bySymbol24h).toEqual([
-      { symbol: "BTCUSDT", pnlMc: 0, trades: 0 },
-      { symbol: "ETHUSDT", pnlMc: 0, trades: 0 },
-      { symbol: "SOLUSDT", pnlMc: 0, trades: 0 },
-    ]);
+    expect(snap.pregao.byAgent24h).toEqual([]); // nobody traded -> nobody listed
   });
 });

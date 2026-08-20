@@ -44,7 +44,9 @@ export interface PalcoSnapshot {
   pregao: {
     evolved: WindowStats;
     random: WindowStats;
-    bySymbol24h: Array<{ symbol: string; pnlMc: number; trades: number }>; // evolved cohort only, BTCUSDT/ETHUSDT/SOLUSDT always present (0/0 when no trades)
+    // evolved cohort only, one row per trader with >=1 trade_closed in the
+    // last 24h, sorted pnl24hMc desc. Empty when nobody traded in 24h.
+    byAgent24h: Array<{ traderId: string; name: string; pnl1hMc: number; pnl24hMc: number; trades24h: number }>;
   };
   org: {
     hrPolicy: string; // fixed PT string, see HR_POLICY_PT
@@ -66,10 +68,6 @@ const MS_PER_HOUR = 3_600_000;
 const DEFAULT_EQUITY_MC = 100_000_000; // $1,000.00 seed
 const MAX_EQUITY_SERIES_POINTS = 400;
 const FEED_LIMIT = 40;
-// The three tradeable symbols, in fixed display order — bySymbol24h always
-// carries all three (0/0 for ones with no trades in the window) so the
-// front never has to guess which mesas exist.
-const PREGAO_SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT"] as const;
 
 const HR_POLICY_PT =
   "RH baseado em evidência: compara cada trader ao benchmark max(controle aleatório, não fazer nada) na mesma janela de 7 dias. Demite só com evidência clara de underperformance; evidência insuficiente nunca demite nem promove.";
@@ -185,25 +183,57 @@ function computeWindowStats(raw: BetterSqlite3.Database, cohort: Cohort, nowMs: 
   };
 }
 
-function computeBySymbol24h(raw: BetterSqlite3.Database, nowMs: number): PalcoSnapshot["pregao"]["bySymbol24h"] {
-  const payloads = tradeClosedPayloadsInWindow(raw, "evolved", nowMs, MS_PER_DAY);
-  const bySymbol = new Map<string, { pnlMc: number; trades: number }>();
-  for (const payload of payloads) {
-    const existing = bySymbol.get(payload.symbol) ?? { pnlMc: 0, trades: 0 };
-    bySymbol.set(payload.symbol, { pnlMc: existing.pnlMc + payload.realizedPnlMc, trades: existing.trades + 1 });
+interface TradeClosedRow {
+  ts: number;
+  trader_id: string;
+  name: string;
+  realizedPnlMc: number;
+}
+
+/** trade_closed rows for the evolved cohort in the last 24h, with the
+ * trader's id/name attached — one query covers both the 1h and 24h windows
+ * (1h is a subset of 24h, split out in JS by `ts`) instead of querying twice. */
+function evolvedTradeClosedRows24h(raw: BetterSqlite3.Database, nowMs: number): TradeClosedRow[] {
+  const rows = raw
+    .prepare(
+      `SELECT e.ts AS ts, e.trader_id AS trader_id, t.name AS name, e.payload_json AS payload_json
+       FROM events e JOIN traders t ON t.id = e.trader_id
+       WHERE e.type = 'trade_closed' AND t.cohort = 'evolved' AND e.ts > ? AND e.ts <= ?`,
+    )
+    .all(nowMs - MS_PER_DAY, nowMs) as { ts: number; trader_id: string; name: string; payload_json: string }[];
+  return rows.map((row) => ({
+    ts: row.ts,
+    trader_id: row.trader_id,
+    name: row.name,
+    realizedPnlMc: (JSON.parse(row.payload_json) as TradeClosedPayload).realizedPnlMc,
+  }));
+}
+
+function computeByAgent24h(raw: BetterSqlite3.Database, nowMs: number): PalcoSnapshot["pregao"]["byAgent24h"] {
+  const rows = evolvedTradeClosedRows24h(raw, nowMs);
+  const byAgent = new Map<string, { name: string; pnl1hMc: number; pnl24hMc: number; trades24h: number }>();
+  const oneHourAgo = nowMs - MS_PER_HOUR;
+
+  for (const row of rows) {
+    const existing = byAgent.get(row.trader_id) ?? { name: row.name, pnl1hMc: 0, pnl24hMc: 0, trades24h: 0 };
+    byAgent.set(row.trader_id, {
+      name: existing.name,
+      pnl1hMc: existing.pnl1hMc + (row.ts > oneHourAgo ? row.realizedPnlMc : 0),
+      pnl24hMc: existing.pnl24hMc + row.realizedPnlMc,
+      trades24h: existing.trades24h + 1,
+    });
   }
 
-  return PREGAO_SYMBOLS.map((symbol) => {
-    const found = bySymbol.get(symbol);
-    return { symbol, pnlMc: found?.pnlMc ?? 0, trades: found?.trades ?? 0 };
-  });
+  return Array.from(byAgent.entries())
+    .map(([traderId, agg]) => ({ traderId, ...agg }))
+    .sort((a, b) => b.pnl24hMc - a.pnl24hMc);
 }
 
 function computePregao(raw: BetterSqlite3.Database, nowMs: number): PalcoSnapshot["pregao"] {
   return {
     evolved: computeWindowStats(raw, "evolved", nowMs),
     random: computeWindowStats(raw, "random", nowMs),
-    bySymbol24h: computeBySymbol24h(raw, nowMs),
+    byAgent24h: computeByAgent24h(raw, nowMs),
   };
 }
 

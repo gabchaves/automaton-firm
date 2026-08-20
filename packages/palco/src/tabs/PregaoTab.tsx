@@ -52,13 +52,9 @@ const EMPTY_WINDOW_STATS: PalcoSnapshot["pregao"]["evolved"] = {
   pnl1hMc: 0, pnl24hMc: 0, trades1h: 0, trades24h: 0, winRate24h: 0,
 };
 
-// Fallback while there's no snapshot yet — mirrors the shape the Motor
-// always sends (all three symbols present, even at 0/0).
-const EMPTY_BY_SYMBOL_24H: PalcoSnapshot["pregao"]["bySymbol24h"] = [
-  { symbol: "BTCUSDT", pnlMc: 0, trades: 0 },
-  { symbol: "ETHUSDT", pnlMc: 0, trades: 0 },
-  { symbol: "SOLUSDT", pnlMc: 0, trades: 0 },
-];
+// Fallback while there's no snapshot yet — nobody traded, so the real
+// byAgent24h would be empty too.
+const EMPTY_BY_AGENT_24H: PalcoSnapshot["pregao"]["byAgent24h"] = [];
 
 // Formatters for NumberTicker's non-money Pregão stat-cards (money ones
 // reuse `usd` directly, same convention as App.tsx's hero strip).
@@ -118,30 +114,37 @@ function CohortStatsGroup({ title, stats }: { title: string; stats: PalcoSnapsho
   );
 }
 
-/** Per-mesa 24h P&L for the firm (evolved cohort only) — BTC/ETH/SOL always
- * listed, 0/0 when a mesa had no trades in the window. */
-function SymbolPnlTable({ rows }: { rows: PalcoSnapshot["pregao"]["bySymbol24h"] }) {
+/** P&L 24h (e 1h) por agente da firma — só evolved, só quem operou nas
+ * últimas 24h, ordenado por P&L 24h desc. v4.1: substitui a versão por
+ * mesa a pedido do usuário ("tira mesa e troca por agente"). */
+function AgentPnlTable({ rows }: { rows: PalcoSnapshot["pregao"]["byAgent24h"] }) {
   return (
-    <section className="symbol-pnl-panel">
-      <h2 className="section-title">P&amp;L 24h por mesa</h2>
-      <table className="symbol-pnl-table">
-        <thead>
-          <tr>
-            <th>Mesa</th>
-            <th>P&amp;L</th>
-            <th>Trades</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr key={row.symbol}>
-              <td className="mono-bold">{row.symbol}</td>
-              <td className={row.pnlMc < 0 ? "pnl-value pnl-neg" : "pnl-value pnl-pos"}>{usd(row.pnlMc)}</td>
-              <td>{row.trades}</td>
+    <section className="agent-pnl-panel">
+      <h2 className="section-title">P&amp;L por agente</h2>
+      {rows.length === 0 ? (
+        <p className="empty-state">ninguém operou nas últimas 24h.</p>
+      ) : (
+        <table className="agent-pnl-table">
+          <thead>
+            <tr>
+              <th>Agente</th>
+              <th>1h</th>
+              <th>24h</th>
+              <th>Trades</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.traderId}>
+                <td className="mono-bold">{row.name}</td>
+                <td className={row.pnl1hMc < 0 ? "pnl-value pnl-neg" : "pnl-value pnl-pos"}>{usd(row.pnl1hMc)}</td>
+                <td className={row.pnl24hMc < 0 ? "pnl-value pnl-neg" : "pnl-value pnl-pos"}>{usd(row.pnl24hMc)}</td>
+                <td>{row.trades24h}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </section>
   );
 }
@@ -197,7 +200,7 @@ export function PregaoTab({ snapshot }: PregaoTabProps) {
   const baselineUsd = seedMc / 100_000;
   const pregaoEvolved = snapshot?.pregao.evolved ?? EMPTY_WINDOW_STATS;
   const pregaoRandom = snapshot?.pregao.random ?? EMPTY_WINDOW_STATS;
-  const bySymbol24h = snapshot?.pregao.bySymbol24h ?? EMPTY_BY_SYMBOL_24H;
+  const byAgent24h = snapshot?.pregao.byAgent24h ?? EMPTY_BY_AGENT_24H;
   const evolvedPoints = toPoints(snapshot?.equitySeries.evolved ?? []);
   const randomPoints = toPoints(snapshot?.equitySeries.random ?? []);
   const allTs = [...evolvedPoints, ...randomPoints].map((p) => p.x);
@@ -287,28 +290,33 @@ export function PregaoTab({ snapshot }: PregaoTabProps) {
 
         <div className="pregao-side">
           <OpenPositionsPanel positions={positions} stakeMc={stakeMc} />
-
-          <SymbolPnlTable rows={bySymbol24h} />
-
-          <section className="trades-panel">
-            <h2 className="section-title">Últimos trades</h2>
-            <ul className="trade-feed">
-              {trades.length === 0 && <li>Sem trades ainda.</li>}
-              {trades.slice(0, MAX_TRADE_ITEMS).map((item) => (
-                <li key={item.id} className={pnlRowClass(item)}>
-                  <span className="ts">{dateShort(item.ts)}</span>
-                  {/*
-                    Safe: item.html is produced server-side by
-                    src/motor/palco-format.ts's formatEventPt, which escapes every
-                    payload value through escapeHtml before interpolation. This is
-                    the same trusted, pre-escaped field the Mural tab renders.
-                  */}
-                  <span dangerouslySetInnerHTML={{ __html: item.html }} />
-                </li>
-              ))}
-            </ul>
-          </section>
         </div>
+      </div>
+
+      {/* v4.1: "Últimos trades" e "P&L por agente" lado a lado — pedido
+          explícito do usuário, uma fileira de duas colunas abaixo do
+          gráfico em vez de empilhados na coluna estreita. */}
+      <div className="pregao-bottom-grid">
+        <AgentPnlTable rows={byAgent24h} />
+
+        <section className="trades-panel">
+          <h2 className="section-title">Últimos trades</h2>
+          <ul className="trade-feed">
+            {trades.length === 0 && <li>Sem trades ainda.</li>}
+            {trades.slice(0, MAX_TRADE_ITEMS).map((item) => (
+              <li key={item.id} className={pnlRowClass(item)}>
+                <span className="ts">{dateShort(item.ts)}</span>
+                {/*
+                  Safe: item.html is produced server-side by
+                  src/motor/palco-format.ts's formatEventPt, which escapes every
+                  payload value through escapeHtml before interpolation. This is
+                  the same trusted, pre-escaped field the Mural tab renders.
+                */}
+                <span dangerouslySetInnerHTML={{ __html: item.html }} />
+              </li>
+            ))}
+          </ul>
+        </section>
       </div>
     </>
   );

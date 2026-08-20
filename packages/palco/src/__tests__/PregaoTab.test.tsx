@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { PregaoTab } from "../tabs/PregaoTab";
 import { usd } from "../format";
 import { fixtureSnapshot } from "./fixtures";
@@ -17,10 +17,13 @@ describe("PregaoTab", () => {
   it("renders the open positions panel with the inPosition fixture trader", () => {
     render(<PregaoTab snapshot={fixtureSnapshot} />);
 
-    expect(screen.getByText("Posições abertas")).toBeInTheDocument();
-    // Ada Faria is the fixture's only inPosition: true trader.
-    expect(screen.getByText("Ada Faria")).toBeInTheDocument();
-    expect(screen.getByText("BTCUSDT · 2x")).toBeInTheDocument();
+    // Ada Faria is the fixture's only inPosition: true trader, but she also
+    // shows up in the "P&L por agente" table below (she traded in the last
+    // 24h too) — scope every assertion to the positions panel itself.
+    const panel = screen.getByText("Posições abertas").closest("section") as HTMLElement;
+    expect(panel).toBeInTheDocument();
+    expect(within(panel).getByText("Ada Faria")).toBeInTheDocument();
+    expect(within(panel).getByText("BTCUSDT · 2x")).toBeInTheDocument();
     // entryPriceCents: 6_000_000 -> centsToUsd -> $60000.00
     expect(screen.getByText("$60000.00")).toBeInTheDocument();
     expect(screen.getByText("$7.00")).toBeInTheDocument(); // bookMc: 700_000
@@ -95,22 +98,28 @@ describe("PregaoTab", () => {
     expect(negValues.length).toBe(2);
   });
 
-  it("renders the per-mesa 24h P&L table with BTC/ETH/SOL always present, even at zero", () => {
+  it("renders the per-agent P&L table (v4.1 — replaces the per-mesa version) with 1h/24h columns", () => {
     render(<PregaoTab snapshot={fixtureSnapshot} />);
 
-    expect(screen.getByText("P&L 24h por mesa")).toBeInTheDocument();
-    expect(screen.getByText("BTCUSDT")).toBeInTheDocument();
-    expect(screen.getByText("ETHUSDT")).toBeInTheDocument();
-    // SOLUSDT has 0 trades in the fixture but must still be listed.
-    expect(screen.getByText("SOLUSDT")).toBeInTheDocument();
-    expect(screen.getByText(usd(0))).toBeInTheDocument();
+    // Ada Faria also appears in the positions panel (she's inPosition too) —
+    // scope every assertion to the agent table itself.
+    const table = screen.getByText("P&L por agente").closest("section") as HTMLElement;
+    expect(table).toBeInTheDocument();
+    // Fixture's byAgent24h: Ada Faria (1h $0.30, 24h $0.90), Nicolas Oliveira
+    // (1h $0.15, 24h $0.30) — Ada's 1h value and Nicolas's 24h value are both
+    // $0.30, so assert per-row instead of a bare value lookup.
+    const adaRow = within(table).getByText("Ada Faria").closest("tr") as HTMLElement;
+    expect(within(adaRow).getByText(usd(30_000))).toBeInTheDocument(); // 1h
+    expect(within(adaRow).getByText(usd(90_000))).toBeInTheDocument(); // 24h
+
+    const nicolasRow = within(table).getByText("Nicolas Oliveira").closest("tr") as HTMLElement;
+    expect(within(nicolasRow).getByText(usd(15_000))).toBeInTheDocument(); // 1h
+    expect(within(nicolasRow).getByText(usd(30_000))).toBeInTheDocument(); // 24h
   });
 
-  it("still shows all three mesas at 0/0 when there is no snapshot yet", () => {
+  it("shows the empty state when nobody has traded in the last 24h (or there is no snapshot yet)", () => {
     render(<PregaoTab snapshot={null} />);
 
-    expect(screen.getByText("BTCUSDT")).toBeInTheDocument();
-    expect(screen.getByText("ETHUSDT")).toBeInTheDocument();
-    expect(screen.getByText("SOLUSDT")).toBeInTheDocument();
+    expect(screen.getByText("ninguém operou nas últimas 24h.")).toBeInTheDocument();
   });
 });

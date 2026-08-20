@@ -215,13 +215,9 @@ export const fixtureSnapshot: PalcoSnapshot = {
   pregao: {
     evolved: { pnl1hMc: 45_000, pnl24hMc: 120_000, trades1h: 3, trades24h: 14, winRate24h: 9 / 14 },
     random: { pnl1hMc: -8_000, pnl24hMc: -12_400, trades1h: 1, trades24h: 9, winRate24h: 3 / 9 },
-    bySymbol24h: [
-      { symbol: "BTCUSDT", pnlMc: 90_000, trades: 9 },
-      { symbol: "ETHUSDT", pnlMc: 30_000, trades: 5 },
-      // Deliberately zero — no evolved trades on this mesa in the window —
-      // proves the front always lists all three symbols, never just the
-      // ones with activity.
-      { symbol: "SOLUSDT", pnlMc: 0, trades: 0 },
+    byAgent24h: [
+      { traderId: "t-ada", name: "Ada Faria", pnl1hMc: 30_000, pnl24hMc: 90_000, trades24h: 9 },
+      { traderId: "t-nic", name: "Nicolas Oliveira", pnl1hMc: 15_000, pnl24hMc: 30_000, trades24h: 5 },
     ],
   },
   org: {

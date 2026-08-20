@@ -1259,23 +1259,39 @@ ul.history-timeline li {
 
 .positions-panel,
 .trades-panel,
-.symbol-pnl-panel {
+.agent-pnl-panel {
   background: var(--black);
   border: var(--border-fade);
   padding: 14px 16px;
 }
 
-/* Per-mesa 24h P&L table (Task A2, v4 plan) — plain semantic <table>, same
- * mono/hairline tokens as everywhere else; P&L cells reuse .pnl-value's
- * pnl-pos/pnl-neg coloring. */
-.symbol-pnl-table {
+/* v4.1: "Últimos trades" and "P&L 24h por agente" side by side, full width,
+ * below the chart+positions row — a literal "lado a lado" per the user's
+ * request, instead of both stacked in the narrow side column. */
+.pregao-bottom-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin-top: 24px;
+}
+
+@media (max-width: 860px) {
+  .pregao-bottom-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Per-agente 24h P&L table (v4.1 — replaces the earlier per-mesa version):
+ * plain semantic <table>, same mono/hairline tokens as everywhere else;
+ * P&L cells reuse .pnl-value's pnl-pos/pnl-neg coloring. */
+.agent-pnl-table {
   width: 100%;
   border-collapse: collapse;
   font-family: var(--font-mono);
   font-size: 12.5px;
 }
 
-.symbol-pnl-table th {
+.agent-pnl-table th {
   text-align: left;
   color: var(--blue);
   font-size: 9.5px;
@@ -1285,12 +1301,12 @@ ul.history-timeline li {
   border-bottom: var(--border-fade);
 }
 
-.symbol-pnl-table td {
+.agent-pnl-table td {
   padding: 7px 0;
   border-bottom: var(--border-fade);
 }
 
-.symbol-pnl-table tr:last-child td {
+.agent-pnl-table tr:last-child td {
   border-bottom: none;
 }
 

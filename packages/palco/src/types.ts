@@ -76,7 +76,7 @@ export interface PalcoSnapshot {
   pregao: {
     evolved: PalcoWindowStats;
     random: PalcoWindowStats;
-    bySymbol24h: Array<{ symbol: string; pnlMc: number; trades: number }>; // evolved cohort only, BTCUSDT/ETHUSDT/SOLUSDT always present (0/0 when no trades)
+    byAgent24h: Array<{ traderId: string; name: string; pnl1hMc: number; pnl24hMc: number; trades24h: number }>; // evolved cohort only, sorted pnl24h desc, absent if no trades in 24h
   };
   org: {
     hrPolicy: string; // fixed PT string
