@@ -722,14 +722,24 @@ li.orkut-scrap:last-child {
   color: var(--black);
 }
 
+/* .ceo-name also carries .section-title (className="ceo-name section-title")
+ * so the card's ONE true headline — the current CEO's name, not the role
+ * label — gets the exact same weight/size as RH's "Recursos Humanos"
+ * headline. Only spacing is overridden here. */
 .ceo-name {
-  font-family: var(--font-display);
-  font-size: clamp(20px, 2.4vw, 26px);
-  line-height: 0.95;
-  text-transform: uppercase;
-  letter-spacing: -0.01em;
-  color: var(--black);
   margin: 2px 0 8px;
+}
+
+/* "CEO" itself is demoted to a small kicker (role tag), same idea as a
+ * hero-card's .label sitting above its big .v value — the name earns the
+ * headline treatment, the role doesn't need to repeat it. */
+.ceo-kicker {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--black);
+  opacity: 0.6;
 }
 
 .rh-card-heading {

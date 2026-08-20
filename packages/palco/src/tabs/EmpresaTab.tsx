@@ -70,12 +70,16 @@ export function EmpresaTab({ snapshot }: EmpresaTabProps) {
             <span className="org-rh-icon" aria-hidden="true">
               🧬
             </span>
-            <h2 className="section-title">CEO</h2>
+            <span className="ceo-kicker">CEO</span>
           </div>
           {ceo ? (
             <>
-              <p className="ceo-name">{ceo.name}</p>
-              <p className="rh-policy">Eleito pelo mercado, não por currículo — lidera o book da firma agora.</p>
+              <h2 className="ceo-name section-title">{ceo.name}</h2>
+              <p className="rh-policy">
+                Eleito pelo mercado, não por currículo: o cargo vai automaticamente para quem lidera o book da firma
+                agora, sem indicação nem processo seletivo. Nada de plano de carreira — só o ranking, atualizado a
+                cada rodada.
+              </p>
               <div className="rh-counters">
                 <div>
                   <span className="v">{usd(ceo.bookMc)}</span>
@@ -84,6 +88,10 @@ export function EmpresaTab({ snapshot }: EmpresaTabProps) {
                 <div>
                   <span className={ceo.realizedPnlMc < 0 ? "v pnl-neg" : "v pnl-pos"}>{usd(ceo.realizedPnlMc)}</span>
                   <span className="label">lucro realizado</span>
+                </div>
+                <div>
+                  <span className="v">{ceo.tradesCount}</span>
+                  <span className="label">trades no ciclo</span>
                 </div>
               </div>
               <p className="rh-next-review">
