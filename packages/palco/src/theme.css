@@ -1754,7 +1754,17 @@ ul.trade-feed .ts {
  * SobreSubsection), the same chip-styled mini-heading EmpresaDrawer's
  * profile sections already use ("Papel na firma", "Genoma", etc.). */
 .sobre-subsection {
-  margin: 0 0 22px;
+  margin: 0 0 26px;
+}
+
+/* v4.2 Task 3 polish: a hairline "chapter break" between subsections —
+ * same --border-fade token every hairline in the identity uses (`.rule`,
+ * table row dividers, card borders), just scoped to consecutive
+ * `.sobre-subsection` siblings so the FIRST subsection (right under the
+ * "O projeto" title) stays flush, with no rule floating above it. */
+.sobre-subsection + .sobre-subsection {
+  padding-top: 20px;
+  border-top: var(--border-fade);
 }
 
 .sobre-subsection-title {
@@ -1774,6 +1784,25 @@ ul.trade-feed .ts {
   font-family: var(--font-mono);
   color: var(--lightgrey);
   font-size: 13px;
+}
+
+/* v4.2 Task 3 polish: reuse already-established site icons on the RH/
+ * Recorde beats — 🧾 is the RH ciclo-de-avaliação icon (muralVoice.ts's
+ * hr_review headline, mural-posts.ts), 🔔 is the record icon (record_broken
+ * headline AND GeracoesTab's record badge). "Motor" has no established
+ * icon anywhere else in the app, so it stays text-only rather than
+ * inventing one. `::before` content is CSS-only decoration, not part of
+ * the chip's `textContent` — SobreTab.test.tsx's exact chip-text assertion
+ * (["Motor", "RH", "Recorde"]) keeps passing unmodified. `:nth-child`
+ * (not `:nth-of-type`) because the strip's chip/arrow spans share one tag
+ * name — position among ALL children is what actually picks out the 2nd
+ * and 3rd chip. */
+.sobre-flow-strip .chip:nth-child(3)::before {
+  content: "🧾 ";
+}
+
+.sobre-flow-strip .chip:nth-child(5)::before {
+  content: "🔔 ";
 }
 
 .sobre-paragraph {
@@ -1813,17 +1842,37 @@ ul.trade-feed .ts {
 
 /* Golden rule block — the honesty banner's new home inside the Sobre tab
  * (moved from the global footer at the owner's request). Same --blue band
- * identity the footer had. */
+ * identity the footer had. v4.2 Task 3: promoted from a small mono caption
+ * to a real Anton-display pull-quote — this one sentence IS the entire
+ * honesty promise of the project, so it should read as the loudest line on
+ * the page, not the smallest. The oversized quote mark hangs off the
+ * PARAGRAPH specifically (not the whole aside) so it never collides with
+ * the "A regra de ouro" label chip sitting on the line above; it's
+ * decorative only (generated `content` on a pseudo-element, never part of
+ * the paragraph's accessible text or `textContent`). */
 .sobre-golden-rule {
-  margin: 22px 0 18px;
+  margin: 26px 0 18px;
   background: var(--blue);
-  padding: 14px 18px 16px;
+  padding: 20px 22px 22px;
   max-width: 72ch;
 }
 .sobre-golden-rule p {
-  margin: 8px 0 0;
+  position: relative;
+  margin: 10px 0 0;
+  padding-left: 30px;
   color: var(--ink);
-  font-family: var(--font-mono);
-  font-size: 12px;
-  line-height: 1.6;
+  font-family: var(--font-display);
+  font-size: clamp(17px, 2.1vw, 23px);
+  line-height: 1.3;
+  letter-spacing: 0.01em;
+}
+.sobre-golden-rule p::before {
+  content: "\201C";
+  position: absolute;
+  top: -10px;
+  left: -4px;
+  font-size: 44px;
+  line-height: 1;
+  color: var(--ink);
+  opacity: 0.3;
 }
