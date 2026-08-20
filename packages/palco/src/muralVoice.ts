@@ -89,6 +89,44 @@ function tradeClosedBody(payload: Record<string, unknown>, rng: Rng): string {
   ]);
 }
 
+/**
+ * Body for the grouped "Balanço do dia" post — one trader's own small
+ * trades bundled into a single post (mural-posts.ts's startGroupedTrade/
+ * addToGroupedTrade). This used to be a hand-written 2-variant function
+ * (one win line, one loss line) that never went through the v4/v4.6 pool
+ * expansions — since grouped posts are the single most frequent post type
+ * on the wall, that was the dominant source of "posts muito repetitivos"
+ * even after every other pool got bigger (v4.7 fix).
+ *
+ * Unlike `pickBody`, callers must freeze the picked line across an
+ * accumulator's whole lifetime: `rng` is called ONCE per post (not once
+ * per recompute), typically via a fraction frozen at group-start, so the
+ * SAME template stays picked as count/saldo update on every new small
+ * trade folded in — see mural-posts.ts's GroupAccumulator.bodyRng.
+ */
+export function pickGroupedTradeBody(count: number, netPnlMc: number, rng: Rng): string {
+  const countLabel = count === 1 ? "1 operação miúda" : `${count} operações miúdas`;
+  const saldo = signedUsd(netPnlMc);
+  if (netPnlMc >= 0) {
+    return pick(rng, [
+      `${countLabel}, saldo ${saldo}. Formiguinha também é lucro.`,
+      `${countLabel}, saldo ${saldo}. Não é muito, mas é honesto.`,
+      `${countLabel}, saldo ${saldo}. Migalha atrás de migalha também vira book.`,
+      `${countLabel}, saldo ${saldo}. Ninguém fica rico assim, mas ajuda.`,
+      `${countLabel}, saldo ${saldo}. O genoma cata trocado o dia inteiro.`,
+      `${countLabel}, saldo ${saldo}. Devagar e sempre também é estratégia.`,
+    ]);
+  }
+  return pick(rng, [
+    `${countLabel}, saldo ${saldo}. A corretora agradece as taxas.`,
+    `${countLabel}, saldo ${saldo}. Dia de pagar pedágio.`,
+    `${countLabel}, saldo ${saldo}. Nenhuma vitória hoje, só taxa.`,
+    `${countLabel}, saldo ${saldo}. Miudinho também dói.`,
+    `${countLabel}, saldo ${saldo}. A corretora fatura, o book sangra baixinho.`,
+    `${countLabel}, saldo ${saldo}. Ninguém quebra assim, mas incomoda.`,
+  ]);
+}
+
 function traderDiedBody(payload: Record<string, unknown>, rng: Rng): string {
   const name = str(payload, "name", "Trader");
   const age = `${(num(payload, "ageMs") / 3_600_000).toFixed(1)}h`;

@@ -107,9 +107,10 @@ describe("MuralTab", () => {
     // (v4.7's real behavior groups by trader when traderName is present —
     // see mural-posts.test.ts) — they still collapse into exactly ONE post.
     expect(screen.getByText("🔁 Balanço do dia")).toBeInTheDocument();
-    expect(
-      screen.getByText("2 operações miúdas, saldo $0.01. Formiguinha também é lucro."),
-    ).toBeInTheDocument();
+    // Exact tail phrase comes from a 6-variant pool (v4.7 fix) — assert the
+    // aggregation (count + saldo), not which flavor got picked; pool
+    // coverage itself is tested in muralVoice.test.ts.
+    expect(screen.getByText(/^2 operações miúdas, saldo \$0\.01\./)).toBeInTheDocument();
     const groupedScraps = document.querySelectorAll("li.orkut-scrap");
     const matching = Array.from(groupedScraps).filter((li) => li.textContent?.includes("Balanço do dia"));
     expect(matching).toHaveLength(1);
@@ -146,7 +147,10 @@ describe("MuralTab", () => {
     };
     render(<MuralTab snapshot={losingGroupSnapshot} />);
     expect(screen.getByText("🔁 Balanço do dia")).toBeInTheDocument();
-    expect(screen.getByText("2 operações miúdas, saldo -$0.04. A corretora agradece as taxas.")).toBeInTheDocument();
+    // Exact tail phrase comes from a 6-variant loss pool (v4.7 fix) — assert
+    // the negative saldo routed to the loss pool, not which flavor got
+    // picked; pool coverage itself is tested in muralVoice.test.ts.
+    expect(screen.getByText(/^2 operações miúdas, saldo -\$0\.04\./)).toBeInTheDocument();
   });
 
   it("skips a quiet hr_review post (zero firings and zero promotions)", () => {

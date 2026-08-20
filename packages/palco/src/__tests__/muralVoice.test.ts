@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { mulberry32 } from "../rng";
-import { pickBody, signedUsd, poolSizeFor } from "../muralVoice";
+import { pickBody, pickGroupedTradeBody, signedUsd, poolSizeFor } from "../muralVoice";
 
 // v4 plan Task B2: every pool must carry >= 4 variants so a run of posts
 // doesn't repeat within a week; v4.6 raised the floor to >= 6 after user
@@ -51,6 +51,55 @@ describe("pool sizes (v4 Task B2, floor raised in v4.6)", () => {
   it("has at least 6 variants for trade_closed's loss branch", () => {
     const size = samplePoolSize("trade_closed", { symbol: "BTCUSDT", realizedPnlMc: -50_000 });
     expect(size).toBeGreaterThanOrEqual(6);
+  });
+});
+
+/** pickGroupedTradeBody (v4.7 fix): the grouped "Balanço do dia" post used
+ * to hand-write only 2 total variants (one win line, one loss line) and
+ * never went through the v4/v4.6 pool expansions above — since grouped
+ * posts are the single most frequent post type on the wall, that was the
+ * dominant source of "posts muito repetitivos" even after every other pool
+ * got bigger. Same 12-probe technique as samplePoolSize above, just with
+ * pickGroupedTradeBody's own (count, netPnlMc, rng) signature instead of
+ * pickBody's (type, payload, rng). */
+function sampleGroupedPoolSize(netPnlMc: number, probes = 12): number {
+  const seen = new Set<string>();
+  for (let i = 0; i < probes; i++) {
+    const fraction = (i + 0.5) / probes;
+    seen.add(pickGroupedTradeBody(3, netPnlMc, () => fraction));
+  }
+  return seen.size;
+}
+
+describe("pickGroupedTradeBody pool sizes (v4.7)", () => {
+  it("has at least 6 variants for a positive net saldo", () => {
+    expect(sampleGroupedPoolSize(50_000)).toBeGreaterThanOrEqual(6);
+  });
+
+  it("has at least 6 variants for a negative net saldo", () => {
+    expect(sampleGroupedPoolSize(-50_000)).toBeGreaterThanOrEqual(6);
+  });
+
+  it("is deterministic: the same seed always picks the same line, forever", () => {
+    const first = pickGroupedTradeBody(2, 10_000, mulberry32(999));
+    const second = pickGroupedTradeBody(2, 10_000, mulberry32(999));
+    expect(first).toBe(second);
+  });
+
+  it("singularizes the count label for exactly 1 operation", () => {
+    const body = pickGroupedTradeBody(1, 50_000, () => 0);
+    expect(body).toMatch(/^1 operação miúda,/);
+  });
+
+  it("pluralizes the count label for 2+ operations", () => {
+    const body = pickGroupedTradeBody(2, 50_000, () => 0);
+    expect(body).toMatch(/^2 operações miúdas,/);
+  });
+
+  it("routes a zero net saldo to the win pool (netPnlMc >= 0), not the loss pool", () => {
+    const body = pickGroupedTradeBody(3, 0, () => 0);
+    expect(body).toContain("saldo $0.00");
+    expect(body).not.toMatch(/taxa|pedágio|sangra|quebra/);
   });
 });
 

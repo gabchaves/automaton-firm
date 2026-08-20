@@ -16,9 +16,10 @@
  */
 import type { PalcoSnapshot } from "../types";
 import type { Employee } from "../lineage";
+import type { Rng } from "../rng";
 import { usd } from "../format";
 import { mulberry32 } from "../rng";
-import { pickBody, signedUsd } from "../muralVoice";
+import { pickBody, pickGroupedTradeBody } from "../muralVoice";
 import { cargoForEmployee } from "../cargo";
 
 // Exported so MuralTab.tsx can type the older pages it fetches from
@@ -103,14 +104,6 @@ function hasHrActions(payload: Record<string, unknown>): boolean {
   return num(payload, "fired") + num(payload, "promoted") > 0;
 }
 
-function groupedTradeBody(count: number, netPnlMc: number): string {
-  const countLabel = count === 1 ? "1 operação miúda" : `${count} operações miúdas`;
-  const saldo = signedUsd(netPnlMc);
-  return netPnlMc >= 0
-    ? `${countLabel}, saldo ${saldo}. Formiguinha também é lucro.`
-    : `${countLabel}, saldo ${saldo}. A corretora agradece as taxas.`;
-}
-
 /** Real trader identity for a grouped small-trade post — same resolution
  * as buildEventPost's individual trade_closed case. Falls back to the
  * old symbol-as-persona framing only when traderName is missing (an event
@@ -141,6 +134,11 @@ interface GroupAccumulator {
   post: MuralPost;
   count: number;
   netPnlMc: number;
+  // Frozen at group-start (one draw from mulberry32(firstItemId)), then
+  // reused as-is on every recompute — pickGroupedTradeBody must pick the
+  // SAME template as count/saldo update with each new small trade folded
+  // in, or the post's flavor would visibly reroll mid-thread.
+  bodyRng: Rng;
 }
 
 function startGroupedTrade(
@@ -151,9 +149,11 @@ function startGroupedTrade(
 ): GroupAccumulator {
   const netPnlMc = num(item.payload, "realizedPnlMc");
   const symbol = symbolOf(item);
+  const frozenFraction = mulberry32(item.id)();
   const acc: GroupAccumulator = {
     count: 1,
     netPnlMc,
+    bodyRng: () => frozenFraction,
     post: {
       key: `group-${groupKey}-${item.id}`,
       ts: item.ts, // feed is newest-first, so the FIRST small trade of this trader encountered is the most recent
@@ -165,7 +165,7 @@ function startGroupedTrade(
       includeSad: false,
     },
   };
-  acc.post.body = groupedTradeBody(acc.count, acc.netPnlMc);
+  acc.post.body = pickGroupedTradeBody(acc.count, acc.netPnlMc, acc.bodyRng);
   return acc;
 }
 
@@ -173,7 +173,7 @@ function addToGroupedTrade(acc: GroupAccumulator, item: FeedItem): void {
   acc.count += 1;
   acc.netPnlMc += num(item.payload, "realizedPnlMc");
   acc.post.memberIds.push(item.id);
-  acc.post.body = groupedTradeBody(acc.count, acc.netPnlMc);
+  acc.post.body = pickGroupedTradeBody(acc.count, acc.netPnlMc, acc.bodyRng);
 }
 
 function buildEventPost(item: FeedItem, employees: Employee[], leaderboard: LeaderboardEntry[]): MuralPost {
