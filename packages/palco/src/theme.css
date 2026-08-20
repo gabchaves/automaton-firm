@@ -710,9 +710,10 @@ li.orkut-scrap:last-child {
 
 /* CEO card — same cream panel as .rh-card, but --green top accent instead
  * of --blue, so the two leadership cards read as siblings (same shape)
- * with distinct roles (different accent). Framed honestly: this firm has
- * no LLM in the decision path, so the "CEO" is ceremonial by design, not
- * a placeholder waiting for a real strategist. */
+ * with distinct roles (different accent). The seat isn't vacant: it's
+ * held by whoever's winning right now (see EmpresaTab.tsx's pickCeo) —
+ * .ceo-name carries that name with the same weight .section-title gives
+ * every other headline on the page. */
 .ceo-card {
   background: var(--cream);
   border: var(--border-fade);
@@ -721,12 +722,14 @@ li.orkut-scrap:last-child {
   color: var(--black);
 }
 
-.ceo-chip {
-  display: inline-block;
-  font-family: var(--font-mono);
-  font-size: 10px;
+.ceo-name {
+  font-family: var(--font-display);
+  font-size: clamp(20px, 2.4vw, 26px);
+  line-height: 0.95;
+  text-transform: uppercase;
+  letter-spacing: -0.01em;
   color: var(--black);
-  opacity: 0.6;
+  margin: 2px 0 8px;
 }
 
 .rh-card-heading {
@@ -1273,10 +1276,42 @@ ul.history-timeline li {
   margin-bottom: 8px;
 }
 
-.pregao-stats-strip {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
-  gap: 10px;
+/* v4.5: collapses what used to be 4 boxed .hero-cards per cohort into one
+ * thin mono line — Pregão's first screen stacked 14 near-identical boxes
+ * (6 visão geral + 4+4 cohort) before the chart; this cuts 8 of them down
+ * to 2 compact rows. */
+.cohort-stats-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 20px;
+  padding: 8px 0;
+  border-bottom: var(--border-fade);
+}
+
+.cohort-stat {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.cohort-stat-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--lightgrey);
+}
+
+.cohort-stat-value {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  color: var(--green);
+  font-variant-numeric: tabular-nums;
+}
+
+.cohort-stat-value.pnl-neg {
+  color: var(--red);
 }
 
 /* Right-sized layout: chart takes ~62% width on desktop, positions +

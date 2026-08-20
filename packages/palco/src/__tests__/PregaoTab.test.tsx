@@ -90,11 +90,11 @@ describe("PregaoTab", () => {
     expect(screen.getByText(usd(-8_000))).toBeInTheDocument();
   });
 
-  it("colors a negative windowed P&L card red via the pnl-neg override", () => {
+  it("colors a negative windowed P&L stat red via the pnl-neg override", () => {
     render(<PregaoTab snapshot={fixtureSnapshot} />);
 
     // Controle's pnl1hMc (-8_000) and pnl24hMc (-12_400) are both losses.
-    const negValues = document.querySelectorAll(".hero-card .v.pnl-neg");
+    const negValues = document.querySelectorAll(".cohort-stat-value.pnl-neg");
     expect(negValues.length).toBe(2);
   });
 

@@ -89,14 +89,6 @@ function formatOneDecimal(n: number): string {
   return n.toFixed(1);
 }
 
-/** `.hero-card .v` is green by default (see theme.css) — this only adds
- * the `pnl-neg` override class when the value is negative, same red/green
- * "verde/vermelho pelo sinal" convention used by the trades list and the
- * Leaderboard's P&L column. */
-function pnlValueClass(mc: number): string {
-  return mc < 0 ? "v pnl-neg" : "v";
-}
-
 /**
  * "Visão geral" — Pregão's own masthead (v4.4, relocated from App.tsx's
  * global hero strip per user feedback: "essa faixa pode ficar so na
@@ -170,41 +162,49 @@ function VisaoGeralStrip({
   );
 }
 
+/** `.cohort-stat-value` is green by default (theme.css) — only adds the
+ * `pnl-neg` override class when the value is negative, same red/green
+ * "verde/vermelho pelo sinal" convention used everywhere else on Pregão. */
+function cohortStatValueClass(mc: number): string {
+  return mc < 0 ? "cohort-stat-value pnl-neg" : "cohort-stat-value";
+}
+
 /**
- * Windowed stat-cards for one cohort — Task A2 of the v4 plan: "lucro na
- * última hora etc" was the user's literal ask. Reuses `.hero-card` as-is
- * (same visual as the top hero strip), just laid out in a smaller row
- * scoped to this cohort instead of inventing a new card style.
+ * Windowed stats for one cohort — Task A2 of the v4 plan: "lucro na última
+ * hora etc" was the user's literal ask. v4.5: collapsed from 4 boxed
+ * `.hero-card`s into one compact mono line — the boxed version, repeated
+ * for both cohorts on top of the 6-card "visão geral" masthead, stacked 14
+ * near-identical boxes before the chart ("tem coisa demais").
  */
 function CohortStatsGroup({ title, stats }: { title: string; stats: PalcoSnapshot["pregao"]["evolved"] }) {
   return (
     <div className="cohort-stats-group">
       <span className="label">{title}</span>
-      <div className="pregao-stats-strip">
-        <div className="hero-card">
-          <div className="label">Lucro 1h</div>
-          <div className={pnlValueClass(stats.pnl1hMc)}>
+      <div className="cohort-stats-line">
+        <span className="cohort-stat">
+          <span className="cohort-stat-label">Lucro 1h</span>
+          <span className={cohortStatValueClass(stats.pnl1hMc)}>
             <NumberTicker value={stats.pnl1hMc} format={usd} />
-          </div>
-        </div>
-        <div className="hero-card">
-          <div className="label">Lucro 24h</div>
-          <div className={pnlValueClass(stats.pnl24hMc)}>
+          </span>
+        </span>
+        <span className="cohort-stat">
+          <span className="cohort-stat-label">Lucro 24h</span>
+          <span className={cohortStatValueClass(stats.pnl24hMc)}>
             <NumberTicker value={stats.pnl24hMc} format={usd} />
-          </div>
-        </div>
-        <div className="hero-card">
-          <div className="label">Trades 24h</div>
-          <div className="v">
+          </span>
+        </span>
+        <span className="cohort-stat">
+          <span className="cohort-stat-label">Trades 24h</span>
+          <span className="cohort-stat-value">
             <NumberTicker value={stats.trades24h} format={formatCount} />
-          </div>
-        </div>
-        <div className="hero-card">
-          <div className="label">Win rate 24h</div>
-          <div className="v">
+          </span>
+        </span>
+        <span className="cohort-stat">
+          <span className="cohort-stat-label">Win rate 24h</span>
+          <span className="cohort-stat-value">
             <NumberTicker value={stats.winRate24h} format={formatWinRate} />
-          </div>
-        </div>
+          </span>
+        </span>
       </div>
     </div>
   );

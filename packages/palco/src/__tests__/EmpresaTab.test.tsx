@@ -37,12 +37,26 @@ describe("EmpresaTab", () => {
     expect(screen.getByText(/próxima avaliação em \d+h\d{2}/, { selector: ".rh-next-review" })).toBeInTheDocument();
   });
 
-  it("renders the CEO card, framed as ceremonial since the genome writes the strategy", () => {
+  it("renders the CEO card as whoever currently leads the book — Ada Faria in the fixture — not a vacant seat", () => {
     render(<EmpresaTab snapshot={fixtureSnapshot} />);
 
     expect(screen.getByText("CEO", { selector: ".ceo-card .section-title" })).toBeInTheDocument();
-    expect(screen.getByText(/Cargo vago — ocupado pela evolução/)).toBeInTheDocument();
-    expect(screen.getByText(/100% genoma/, { selector: ".ceo-chip" })).toBeInTheDocument();
+    // Ada Faria: evolved, live, bookMc 700_000 — the highest book among the fixture's live evolved traders.
+    expect(screen.getByText("Ada Faria", { selector: ".ceo-name" })).toBeInTheDocument();
+    expect(screen.getByText("$7.00", { selector: ".ceo-card .rh-counters .v" })).toBeInTheDocument();
+    expect(screen.getByText(/Eleito pelo mercado, não por currículo/)).toBeInTheDocument();
+    expect(screen.getByText(/muda de mãos toda vez que alguém supera/)).toBeInTheDocument();
+  });
+
+  it("falls back to a contested-seat message when no live evolved trader exists", () => {
+    const noEvolvedLeader = {
+      ...fixtureSnapshot,
+      leaderboard: fixtureSnapshot.leaderboard.filter((entry) => entry.cohort !== "evolved" || entry.status !== "live"),
+    };
+    render(<EmpresaTab snapshot={noEvolvedLeader} />);
+
+    expect(screen.getByText(/Cargo em disputa/)).toBeInTheDocument();
+    expect(screen.queryByText("Ada Faria", { selector: ".ceo-name" })).not.toBeInTheDocument();
   });
 
   it("renders every current-generation employee as a plain roster row with book/status", () => {
@@ -60,7 +74,8 @@ describe("EmpresaTab", () => {
     // Mesa/leverage text is still NOT duplicated on the compact node (v3
     // Task 3 spec: Leaderboard already owns that display) — but v3.2 adds a
     // cargo.titulo line (job title, not mesa) between the name and the book.
-    expect(screen.getByText("$7.00")).toBeInTheDocument(); // Ada Faria's bookMc = 700_000
+    // Scoped to the roster row (not the CEO card, which now also shows Ada's $7.00 book).
+    expect(screen.getByText("$7.00", { selector: ".org-node-book" })).toBeInTheDocument();
     expect(screen.getByText("demitido")).toBeInTheDocument(); // Caue Reis's status
   });
 

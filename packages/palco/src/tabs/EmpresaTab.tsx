@@ -1,5 +1,5 @@
 import type { PalcoSnapshot } from "../types";
-import { relativeTime, hoursUntilNextUtcMidnight } from "../format";
+import { relativeTime, hoursUntilNextUtcMidnight, usd } from "../format";
 import { STAKE_MC } from "../mood";
 import { EmpresaRoster } from "./EmpresaRoster";
 
@@ -8,6 +8,19 @@ interface EmpresaTabProps {
 }
 
 type HistoryItem = PalcoSnapshot["org"]["history"][number];
+type LeaderboardEntry = PalcoSnapshot["leaderboard"][number];
+
+/**
+ * CEO = whoever's actually winning: the live evolved trader with the
+ * biggest book right now. No vacant seat, no appointee — the title moves
+ * every time someone takes the lead, which is the honest version of "CEO"
+ * this firm can make: earned by book, not by résumé.
+ */
+function pickCeo(leaderboard: LeaderboardEntry[]): LeaderboardEntry | null {
+  const contenders = leaderboard.filter((entry) => entry.cohort === "evolved" && entry.status === "live");
+  if (contenders.length === 0) return null;
+  return contenders.reduce((best, entry) => (entry.bookMc > best.bookMc ? entry : best));
+}
 
 const HISTORY_ICON: Record<string, string> = {
   gen_started: "🌱",
@@ -47,16 +60,11 @@ export function EmpresaTab({ snapshot }: EmpresaTabProps) {
   const rotacoes = history.filter((h) => h.type === "trader_rotated").length;
   const promocoes = history.filter((h) => h.type === "trader_promoted").length;
   const { hours, minutes } = hoursUntilNextUtcMidnight(nowMs);
+  const ceo = pickCeo(snapshot?.leaderboard ?? []);
 
   return (
     <div className="empresa-blocks">
       <div className="leadership-row">
-        {/* Honest by construction, same rule as the Mural's reaction
-            disclaimer: the CEO cadeira existe no organograma, mas não
-            decide trade nenhum. A pesquisa já testou um CEO de verdade
-            (evolução de estratégia via IA — ver docs/TRADING-RESEARCH.md)
-            e ele não bateu o baseline aleatório. Quem escreve a estratégia
-            hoje é o genoma; este card não finge o contrário. */}
         <section className="ceo-card">
           <div className="rh-card-heading">
             <span className="org-rh-icon" aria-hidden="true">
@@ -64,13 +72,23 @@ export function EmpresaTab({ snapshot }: EmpresaTabProps) {
             </span>
             <h2 className="section-title">CEO</h2>
           </div>
-          <p className="rh-policy">
-            Cargo vago — ocupado pela evolução. Já testamos um CEO de verdade (estratégia escrita por IA sobre
-            indicadores técnicos); não bateu o controle aleatório e foi aposentado com honras. Hoje quem decide é o
-            genoma — momentum, reversão à média, breakout e filtro de regime, recombinados por mutação. A cadeira
-            segue lá por tradição corporativa.
-          </p>
-          <span className="label ceo-chip">🧬 estratégia: 100% genoma</span>
+          {ceo ? (
+            <>
+              <p className="ceo-name">{ceo.name}</p>
+              <p className="rh-policy">Eleito pelo mercado, não por currículo — lidera o book da firma agora.</p>
+              <div className="rh-counters">
+                <div>
+                  <span className="v">{usd(ceo.bookMc)}</span>
+                  <span className="label">sob gestão</span>
+                </div>
+              </div>
+              <p className="rh-next-review">
+                O cargo muda de mãos toda vez que alguém supera — sem herança, sem política interna.
+              </p>
+            </>
+          ) : (
+            <p className="rh-policy">Cargo em disputa — ninguém assumiu a liderança ainda.</p>
+          )}
         </section>
 
         <section className="rh-card">
