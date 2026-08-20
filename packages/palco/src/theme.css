@@ -1671,18 +1671,6 @@ ul.trade-feed .ts {
   color: var(--ink);
 }
 
-/* v4 Task B3: the old inline `.sobre-fact` text chips became real
- * `.hero-card` stat-cards — same visual as Pregão's stat-card row
- * (`.pregao-stats-strip`), reused as-is for cross-page consistency instead
- * of a bespoke Sobre-only style. */
-.sobre-stats-strip {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 10px 14px;
-  margin: 18px 0 28px;
-  max-width: 68ch;
-}
-
 /* One mini-titled chunk of "O projeto" (v4 Task B3's wall-of-text fix) —
  * spacing only; the title itself reuses `.label` (see SobreTab.tsx's
  * SobreSubsection), the same chip-styled mini-heading EmpresaDrawer's

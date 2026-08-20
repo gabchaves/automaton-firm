@@ -3,16 +3,7 @@ import { render, screen } from "@testing-library/react";
 import { SobreTab } from "../tabs/SobreTab";
 import { fixtureSnapshot } from "./fixtures";
 import type { PalcoSnapshot } from "../types";
-
-/** Finds the `.hero-card .v` value for a given `.hero-card .label` text —
- * the v4 Task B3 fact-strip is now a real hero-card row (see PregaoTab's
- * `.pregao-stats-strip` for the sibling pattern), not one sentence with
- * the number baked in, so tests read label + value as a pair. */
-function heroCardValue(label: string): string | null | undefined {
-  const labelEl = Array.from(document.querySelectorAll(".hero-card .label")).find((el) => el.textContent === label);
-  const card = labelEl?.closest(".hero-card");
-  return card?.querySelector(".v")?.textContent;
-}
+import { usd } from "../format";
 
 describe("SobreTab", () => {
   it("renders the builder's name and bio, with no phone number anywhere on the page", () => {
@@ -77,34 +68,25 @@ describe("SobreTab", () => {
     expect(screen.getByText(/LinkedIn/)).toBeInTheDocument();
   });
 
-  it("renders the live virgin-days and gensEvolved facts as hero-card stat-cards (v4 Task B3)", () => {
+  it("v4.2: does not render the fact-cards row anymore (removed — it duplicated the global hero strip)", () => {
     render(<SobreTab snapshot={fixtureSnapshot} />);
 
-    // Fixture: cards.virginDays = 12.3, cards.gensEvolved = 3,
-    // cards.genStartMc = 1_000_000 -> $10.00.
-    expect(heroCardValue("Dias de dados virgens")).toBe("12.3");
-    expect(heroCardValue("Geração no ar")).toBe("3");
-    expect(heroCardValue("Por geração, sempre")).toBe("$10.00");
-    expect(document.querySelectorAll(".sobre-stats-strip .hero-card")).toHaveLength(3);
+    expect(document.querySelector(".sobre-stats-strip")).toBeNull();
+    expect(screen.queryByText("Dias de dados virgens")).toBeNull();
+    expect(screen.queryByText("Geração no ar")).toBeNull();
   });
 
-  it("falls back to placeholder facts when there is no snapshot yet", () => {
-    render(<SobreTab snapshot={null} />);
+  it("is scale-invariant: the governance paragraph names the exact seedMc amount, not a hardcoded $100/$10", () => {
+    render(<SobreTab snapshot={fixtureSnapshot} />);
+    // Fixture's cards.genStartMc = 1_000_000 -> $10.00, named in the
+    // "Como funciona" governance paragraph's "... novinhos" sentence.
+    expect(screen.getByText(new RegExp(`nasce a próxima com ${usd(1_000_000).replace("$", "\\$")} novinhos`))).toBeInTheDocument();
 
-    expect(heroCardValue("Dias de dados virgens")).toBe("–");
-    expect(heroCardValue("Geração no ar")).toBe("–");
-    // No snapshot -> the $100_000_000 fallback seed -> $1000.00.
-    expect(heroCardValue("Por geração, sempre")).toBe("$1000.00");
-  });
-
-  it("is scale-invariant: a fixture with a $1000.00 genStartMc renders that exact amount, not a hardcoded $100/$10", () => {
     const bigBankrollSnapshot: PalcoSnapshot = {
       ...fixtureSnapshot,
       cards: { ...fixtureSnapshot.cards, genStartMc: 100_000_000 },
     };
-
     render(<SobreTab snapshot={bigBankrollSnapshot} />);
-
-    expect(heroCardValue("Por geração, sempre")).toBe("$1000.00");
+    expect(screen.getByText(new RegExp(`nasce a próxima com ${usd(100_000_000).replace("$", "\\$")} novinhos`))).toBeInTheDocument();
   });
 });

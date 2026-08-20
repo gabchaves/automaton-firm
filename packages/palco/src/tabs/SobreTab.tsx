@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 import type { PalcoSnapshot } from "../types";
-import { NumberTicker } from "../components/NumberTicker";
 import { usd } from "../format";
 import { initials, avatarBackground } from "../avatar";
 
@@ -83,8 +82,6 @@ function SobreFlowStrip() {
 }
 
 export function SobreTab({ snapshot }: SobreTabProps) {
-  const virginDays = snapshot?.cards.virginDays;
-  const gensEvolved = snapshot?.cards.gensEvolved;
   // Sane fallback while there's no snapshot yet; every real render derives
   // from cards.genStartMc instead, so a bankroll scale change never
   // touches this file again.
@@ -95,28 +92,9 @@ export function SobreTab({ snapshot }: SobreTabProps) {
       <section className="sobre-section">
         <h2 className="section-title">O projeto</h2>
 
-        <div className="sobre-stats-strip">
-          <div className="hero-card">
-            <div className="label">Dias de dados virgens</div>
-            <div className="v">
-              {virginDays !== undefined ? <NumberTicker value={virginDays} format={(n) => n.toFixed(1)} /> : "–"}
-            </div>
-          </div>
-          <div className="hero-card">
-            <div className="label">Geração no ar</div>
-            <div className="v">
-              {gensEvolved !== undefined ? (
-                <NumberTicker value={gensEvolved} format={(n) => `${Math.round(n)}`} />
-              ) : (
-                "–"
-              )}
-            </div>
-          </div>
-          <div className="hero-card">
-            <div className="label">Por geração, sempre</div>
-            <div className="v">{usd(seedMc)}</div>
-          </div>
-        </div>
+        {/* v4.2: the fact-cards row (dias virgens / geração / seed) was
+            removed — it duplicated the global hero strip at the top of
+            every tab, and reads as clutter right under the page title. */}
 
         <SobreSubsection title="O que é">
           <p className="sobre-lead">{PROJECT_LEAD}</p>
