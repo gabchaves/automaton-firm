@@ -88,4 +88,23 @@ describe("App", () => {
     expect(await screen.findByText("A Firma")).toBeInTheDocument();
     expect(screen.queryByText(/Dinheiro real só entra em discussão/)).toBeNull();
   });
+
+  it("renders the 'visão geral' hero cards only on the Pregão tab (v4.4 — moved out of the global header)", async () => {
+    render(<App />);
+
+    // Pregão is the default route — the relocated hero strip is now
+    // PregaoTab's own masthead, not App's.
+    expect(await screen.findByText("Equity da firma")).toBeInTheDocument();
+    expect(screen.getByText("Controle aleatório")).toBeInTheDocument();
+    expect(screen.getByText("Recorde (pico)")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Empresa" }));
+
+    expect(screen.queryByText("Equity da firma")).not.toBeInTheDocument();
+    expect(screen.queryByText("Recorde (pico)")).not.toBeInTheDocument();
+    // Nav and the live dot stay global across every tab (TickerTape has its
+    // own dedicated coverage in TickerTape.test.tsx).
+    expect(screen.getByRole("button", { name: "Empresa" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByText(/ao vivo|reconectando…/)).toBeInTheDocument();
+  });
 });

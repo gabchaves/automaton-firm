@@ -122,4 +122,54 @@ describe("PregaoTab", () => {
 
     expect(screen.getByText("ninguém operou nas últimas 24h.")).toBeInTheDocument();
   });
+
+  it("renders the relocated 'visão geral' hero cards (v4.4 — moved here from App.tsx's global header)", () => {
+    render(<PregaoTab snapshot={fixtureSnapshot} />);
+
+    expect(screen.getByText("Equity da firma")).toBeInTheDocument();
+    expect(screen.getByText("Controle aleatório")).toBeInTheDocument();
+    expect(screen.getByText("Não fazer nada")).toBeInTheDocument();
+    expect(screen.getByText("Recorde (pico)")).toBeInTheDocument();
+    expect(screen.getByText("Gerações vividas")).toBeInTheDocument();
+    expect(screen.getByText("Dados virgens")).toBeInTheDocument();
+
+    // evolvedEquityMc / randomEquityMc / genStartMc (the "não fazer nada"
+    // baseline) / recordEvolvedMc — all formatted via the shared usd().
+    expect(screen.getByText(usd(fixtureSnapshot.cards.evolvedEquityMc))).toBeInTheDocument();
+    expect(screen.getByText(usd(fixtureSnapshot.cards.randomEquityMc))).toBeInTheDocument();
+    expect(screen.getByText(usd(fixtureSnapshot.cards.genStartMc))).toBeInTheDocument();
+    expect(screen.getByText(usd(fixtureSnapshot.cards.recordEvolvedMc))).toBeInTheDocument();
+    // "controle: $11.00" — the NumberTicker renders its own <span>, so only
+    // its own text node ("$11.00") is directly queryable; the "controle: "
+    // prefix lives on a sibling text node inside the same .d div.
+    expect(screen.getByText(usd(fixtureSnapshot.cards.recordRandomMc))).toBeInTheDocument();
+
+    // evolvedGen and randomGen are both 3 in the fixture, so "Geração 3"
+    // appears on both cards.
+    expect(screen.getAllByText("Geração 3").length).toBe(2);
+    // gensEvolved / gensRandom are both 3 too.
+    expect(screen.getByText("firma / controle")).toBeInTheDocument();
+    // virginDays 12.3 -> formatOneDecimal.
+    expect(screen.getByText("12.3")).toBeInTheDocument();
+    expect(screen.getByText("de 90 dias")).toBeInTheDocument();
+  });
+
+  it("lights up ShineBorder on 'Recorde (pico)' for a genuine new record above the generation's seed equity", () => {
+    // Fixture's recordEvolvedMc (1_480_000) > genStartMc (1_000_000) — a
+    // real record, not just the fresh-generation seed value.
+    render(<PregaoTab snapshot={fixtureSnapshot} />);
+
+    expect(screen.getByTestId("shine-border-overlay")).toBeInTheDocument();
+  });
+
+  it("keeps ShineBorder inactive when the record equals the generation's seed (no genuine record yet)", () => {
+    const freshGen = {
+      ...fixtureSnapshot,
+      cards: { ...fixtureSnapshot.cards, recordEvolvedMc: fixtureSnapshot.cards.genStartMc },
+    };
+
+    render(<PregaoTab snapshot={freshGen} />);
+
+    expect(screen.queryByTestId("shine-border-overlay")).not.toBeInTheDocument();
+  });
 });

@@ -1242,6 +1242,17 @@ ul.history-timeline li {
 
 /* ---------- Pregão ---------- */
 
+/* v4.4: the relocated "visão geral" hero strip's own horizontal padding
+ * (same clamp() as .page-content's) would double up now that it's nested
+ * inside Pregão's page-content instead of App's full-bleed site-header —
+ * this wrapper cancels just that horizontal half so the masthead still
+ * sits flush with the per-cohort stats/chart grid below it. Spacing only;
+ * .hero-strip/.hero-card themselves are untouched. */
+.pregao-overview-strip {
+  margin: 0 calc(-1 * clamp(14px, 2vw, 28px));
+  margin-bottom: 24px;
+}
+
 /* Windowed stat-cards (Task A2, v4 plan) — one .cohort-stats-group per
  * cohort, side by side on desktop. Cards themselves are plain .hero-card,
  * reused unchanged; this only adds the grid/label wrapper around them. */

@@ -7,11 +7,13 @@ import {
   Legend,
 } from "chart.js";
 import { Line } from "react-chartjs-2";
+import { motion } from "framer-motion";
 import type { PalcoSnapshot } from "../types";
 import { dateShort, usd, centsToUsd } from "../format";
 import { initials, avatarBackground } from "../avatar";
 import { moodEmoji, STAKE_MC } from "../mood";
 import { NumberTicker } from "../components/NumberTicker";
+import { ShineBorder } from "../components/ShineBorder";
 
 ChartJS.register(LinearScale, PointElement, LineElement, Tooltip, Legend);
 
@@ -26,6 +28,21 @@ const MONO_FONT = "'Geist Mono', Consolas, monospace";
 // v3 plan's "right-sized Pregão": trim the trade feed down from a full
 // dump to a genuinely "last N" list now that positions get their own panel.
 const MAX_TRADE_ITEMS = 8;
+
+// v4.4: the "visão geral" masthead (relocated from App.tsx's global hero
+// strip) — days-virgin gate progress and the strip's stagger-in on first
+// load, both transform/opacity-only per the plan's performance discipline.
+const VIRGIN_DAYS_GATE = 90;
+const HERO_STAGGER_DELAY_S = 0.05;
+const HERO_ENTER_DURATION_S = 0.3;
+
+function heroCardMotionProps(index: number) {
+  return {
+    initial: { opacity: 0, y: 8 },
+    animate: { opacity: 1, y: 0 },
+    transition: { duration: HERO_ENTER_DURATION_S, delay: index * HERO_STAGGER_DELAY_S, ease: "easeOut" as const },
+  };
+}
 
 type LeaderboardEntry = PalcoSnapshot["leaderboard"][number];
 
@@ -66,12 +83,91 @@ function formatWinRate(rate: number): string {
   return `${(rate * 100).toFixed(1)}%`;
 }
 
+// "Dados virgens" (visão geral) is the only one-decimal, non-percent,
+// non-count hero number — everything else reuses `formatCount`/`usd` above.
+function formatOneDecimal(n: number): string {
+  return n.toFixed(1);
+}
+
 /** `.hero-card .v` is green by default (see theme.css) — this only adds
  * the `pnl-neg` override class when the value is negative, same red/green
  * "verde/vermelho pelo sinal" convention used by the trades list and the
  * Leaderboard's P&L column. */
 function pnlValueClass(mc: number): string {
   return mc < 0 ? "v pnl-neg" : "v";
+}
+
+/**
+ * "Visão geral" — Pregão's own masthead (v4.4, relocated from App.tsx's
+ * global hero strip per user feedback: "essa faixa pode ficar so na
+ * primeira tela de pregao"). Same 6 `.hero-card`s, same `NumberTicker`
+ * values, same `ShineBorder` on "Recorde (pico)", same stagger-in motion —
+ * content/behavior unchanged, just re-scoped to read `snapshot` instead of
+ * App's `cards`/`connected`. `seedMc` is the caller's (PregaoTab's own,
+ * already-computed) local — not recomputed here.
+ */
+function VisaoGeralStrip({
+  cards,
+  seedMc,
+  recordEvolvedMc,
+  recordShineThresholdMc,
+}: {
+  cards: PalcoSnapshot["cards"] | undefined;
+  seedMc: number;
+  recordEvolvedMc: number;
+  recordShineThresholdMc: number;
+}) {
+  return (
+    <section className="hero-strip">
+      <motion.div className="hero-card" {...heroCardMotionProps(0)}>
+        <div className="label">Equity da firma</div>
+        <div className="v">
+          <NumberTicker value={cards?.evolvedEquityMc ?? seedMc} format={usd} />
+        </div>
+        <div className="d">Geração {cards?.evolvedGen ?? "–"}</div>
+      </motion.div>
+      <motion.div className="hero-card" {...heroCardMotionProps(1)}>
+        <div className="label">Controle aleatório</div>
+        <div className="v">
+          <NumberTicker value={cards?.randomEquityMc ?? seedMc} format={usd} />
+        </div>
+        <div className="d">Geração {cards?.randomGen ?? "–"}</div>
+      </motion.div>
+      <motion.div className="hero-card" {...heroCardMotionProps(2)}>
+        <div className="label">Não fazer nada</div>
+        <div className="v">{usd(seedMc)}</div>
+        <div className="d">o piso honesto</div>
+      </motion.div>
+      <ShineBorder active={recordEvolvedMc > recordShineThresholdMc}>
+        <motion.div className="hero-card" {...heroCardMotionProps(3)}>
+          <div className="label">Recorde (pico)</div>
+          <div className="v">
+            <NumberTicker value={recordEvolvedMc} format={usd} />
+          </div>
+          <div className="d">
+            controle: <NumberTicker value={cards?.recordRandomMc ?? 0} format={usd} />
+          </div>
+        </motion.div>
+      </ShineBorder>
+      <motion.div className="hero-card" {...heroCardMotionProps(4)}>
+        <div className="label">Gerações vividas</div>
+        <div className="v">
+          <NumberTicker value={cards?.gensEvolved ?? 0} format={formatCount} />{" "}
+          <small>
+            / <NumberTicker value={cards?.gensRandom ?? 0} format={formatCount} />
+          </small>
+        </div>
+        <div className="d">firma / controle</div>
+      </motion.div>
+      <motion.div className="hero-card" {...heroCardMotionProps(5)}>
+        <div className="label">Dados virgens</div>
+        <div className="v">
+          <NumberTicker value={cards?.virginDays ?? 0} format={formatOneDecimal} />
+        </div>
+        <div className="d">de {VIRGIN_DAYS_GATE} dias</div>
+      </motion.div>
+    </section>
+  );
 }
 
 /**
@@ -198,6 +294,11 @@ export function PregaoTab({ snapshot }: PregaoTabProps) {
   const seedMc = snapshot?.cards.genStartMc ?? 100_000_000;
   const stakeMc = snapshot?.cards.traderStartMc ?? STAKE_MC;
   const baselineUsd = seedMc / 100_000;
+  const recordEvolvedMc = snapshot?.cards.recordEvolvedMc ?? 0;
+  // v3.2 plan: ShineBorder lights up the "Recorde (pico)" hero card only for
+  // a genuine new record ABOVE the generation's seed equity — never for the
+  // seed value itself, which every fresh generation starts at.
+  const recordShineThresholdMc = seedMc;
   const pregaoEvolved = snapshot?.pregao.evolved ?? EMPTY_WINDOW_STATS;
   const pregaoRandom = snapshot?.pregao.random ?? EMPTY_WINDOW_STATS;
   const byAgent24h = snapshot?.pregao.byAgent24h ?? EMPTY_BY_AGENT_24H;
@@ -275,6 +376,22 @@ export function PregaoTab({ snapshot }: PregaoTabProps) {
 
   return (
     <>
+      {/* v4.4: "visão geral" (relocated hero strip) + the per-cohort
+          windowed stats directly below it — one concentrated masthead
+          panel at the top of Pregão, per the user's ask. `.pregao-overview-strip`
+          is a spacing-only wrapper (theme.css) that cancels the hero
+          strip's own horizontal padding, which would otherwise double up
+          with `.page-content`'s now that it's nested here instead of
+          App's full-bleed site-header. */}
+      <div className="pregao-overview-strip">
+        <VisaoGeralStrip
+          cards={snapshot?.cards}
+          seedMc={seedMc}
+          recordEvolvedMc={recordEvolvedMc}
+          recordShineThresholdMc={recordShineThresholdMc}
+        />
+      </div>
+
       <section className="pregao-stats-section">
         <CohortStatsGroup title="Firma" stats={pregaoEvolved} />
         <CohortStatsGroup title="Controle" stats={pregaoRandom} />
