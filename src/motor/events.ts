@@ -60,6 +60,7 @@ export const EVENT_PAYLOAD_SCHEMAS = {
     priceCents: z.number().int(),
     notionalMc: z.number().int(),
     feeMc: z.number().int(),
+    direction: z.enum(["long", "short"]),
   }),
 
   trade_closed: z.strictObject({
@@ -68,6 +69,7 @@ export const EVENT_PAYLOAD_SCHEMAS = {
     realizedPnlMc: z.number().int(),
     feeMc: z.number().int(),
     liquidated: z.boolean(),
+    direction: z.enum(["long", "short"]),
   }),
 
   trader_died: z.strictObject({

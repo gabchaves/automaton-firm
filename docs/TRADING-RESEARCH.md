@@ -411,3 +411,48 @@ verdict is unchanged: no robust directional edge.** What changed is that the
 live random control is now a meaningfully more honest baseline going forward
 — it no longer wins by construction against any strategy that simply trades
 less often than it does.
+
+## Short-selling (2026-08-20, live era)
+
+**Question:** the motor system was 100% long-only — in any downtrend the
+firm's only move was to sit flat, structurally unable to capture roughly half
+of all price action. Does closing that gap produce a real edge, or was the
+search space never the bottleneck (as every prior experiment here concluded)?
+
+**Setup:** design at
+`docs/superpowers/specs/2026-08-20-motor-short-selling-design.md`.
+Symmetric-automatic short: the same signal genes (momentum/meanReversion/
+breakout) that voted long/flat now vote long/short/flat — no new genome
+field, no schema migration, every existing persisted genome gets the
+capability for free. `directional-step.ts`'s execution engine moved to a
+signed `qty` (positive = long, negative = short), which generalizes the P&L
+formula to both sides with no branching — the one place that needed explicit
+care was the exit-fee calculation, which used unsigned `qty` and would have
+paid a *negative* fee (i.e. paid the trader) on every short close if not
+caught (`Math.abs`'d, with a dedicated regression test). The random control's
+draw became a three-way split (long/short/flat) instead of two-way, using the
+same cooldown from the entry above.
+
+**Result — re-ran the identical 6-window sweep:**
+
+| | before short | after short |
+|---|---|---|
+| peak-edge mean | −0.35% (~−1.4%/yr) | −1.19% (~−4.8%/yr) |
+| peak-edge win rate | 50% | 50% |
+| peak-edge std dev | 4.76pp | 2.21pp |
+| final-edge mean | +36.13% (~147%/yr) | +42.35% (~172%/yr) |
+| final-edge win rate | 100% | 100% |
+
+**Finding: short-selling did not create an edge.** The clean metric (peak
+equity) stayed a coin flip — 50% win rate before and after, mean edge still
+indistinguishable from zero (if anything slightly more negative, well within
+noise given the tighter std dev). The final-edge figure is still inflated by
+the same fee-churn asymmetry documented in the entry above (the firm still
+trades less often than the throttled random control) and should not be read
+as a result either. Doubling the tradeable market coverage — long or short
+instead of long-only — did not change the answer, for the same reason more
+generations, more symbols, or more compute never did: **the bottleneck was
+never which side of the market the firm could take, it's that public OHLCV
+signals don't predict either direction.** Short-selling stays in the motor as
+a real, tested, no-longer-missing capability — it closes an honest structural
+gap — but it is not reported as a source of profit.

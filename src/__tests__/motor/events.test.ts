@@ -25,7 +25,7 @@ describe("emitEvents", () => {
     const d = fresh();
     emitEvents(d, [
       { ts: 1, type: "gen_started", traderId: null, generationId: "g1", payload: { cohort: "evolved", genNumber: 1, seedNote: "fresh" } },
-      { ts: 2, type: "trade_opened", traderId: "t1", generationId: "g1", payload: { symbol: "BTCUSDT", priceCents: 10_000, notionalMc: 600_000, feeMc: 600 } },
+      { ts: 2, type: "trade_opened", traderId: "t1", generationId: "g1", payload: { symbol: "BTCUSDT", priceCents: 10_000, notionalMc: 600_000, feeMc: 600, direction: "long" } },
     ]);
     const rows = d.listEvents(0, 10);
     expect(rows.map((r) => r.type)).toEqual(["gen_started", "trade_opened"]);

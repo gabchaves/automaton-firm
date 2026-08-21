@@ -1,8 +1,9 @@
 /**
  * Millicent, single-bar directional step engine for the Motor's live firm.
  *
- * Mirrors runDirectional's semantics (open on wantLong, liquidation at
- * equity <= 0, exit fee on close) but advances ONE bar at a time with
+ * Mirrors runDirectional's semantics (open on a direction signal,
+ * liquidation at equity <= 0, exit fee on close) but advances ONE bar at a
+ * time with
  * persistent state, and accounts in integer millicents so $2 books do not
  * starve to zero by integer-cent rounding (a measured artifact).
  *
@@ -14,10 +15,16 @@ import type { DirectionalParams } from "./directional-engine.js";
 
 export const MC_PER_CENT = 1000;
 
+export type Direction = "long" | "short" | "flat";
+
 export interface DirectionalStepState {
   cashMc: number;
   inPosition: boolean;
-  qty: number; // asset units; position value in mc = qty * priceCents * MC_PER_CENT
+  // Signed asset units: positive = long, negative = short. Position value in
+  // mc = qty * priceCents * MC_PER_CENT — unrealized PnL (qty * (price -
+  // entry)) generalizes to both sides for free from the sign alone, so exit
+  // fee math is the only place that must remember to Math.abs(qty).
+  qty: number;
   entryPriceCents: number;
   cycleStartCashMc: number; // cash before the current cycle's entry fee
   // Patience gene support: 0 on the bar a position opens, +1 each
@@ -91,7 +98,7 @@ function closePosition(
     };
   }
 
-  const exitFeeMc = Math.round((state.qty * priceCents * MC_PER_CENT * params.feeBps) / 10_000);
+  const exitFeeMc = Math.round((Math.abs(state.qty) * priceCents * MC_PER_CENT * params.feeBps) / 10_000);
   const cashMc = state.cashMc + unrealizedMc - exitFeeMc;
   const died = cashMc <= 0;
   const next: DirectionalStepState = {
@@ -115,22 +122,23 @@ function closePosition(
 }
 
 /**
- * Advance one closed bar. Decision (`wantLong`) was made on this bar's close;
- * execution uses the same close price — the convention shared by every engine
- * in this codebase, applied identically to both cohorts.
+ * Advance one closed bar. Decision (`direction`) was made on this bar's
+ * close; execution uses the same close price — the convention shared by
+ * every engine in this codebase, applied identically to both cohorts.
  */
 export function stepDirectional(
   state: DirectionalStepState,
   priceCents: number,
-  wantLong: boolean,
+  direction: Direction,
   params: DirectionalParams,
 ): StepOutcome {
   if (state.died) return flatOutcome(state);
 
   if (!state.inPosition) {
-    if (!wantLong) return flatOutcome(state);
+    if (direction === "flat") return flatOutcome(state);
+    const sign = direction === "long" ? 1 : -1;
     const notionalMc = Math.round(params.leverage * params.riskFraction * state.cashMc);
-    const qty = notionalMc / (priceCents * MC_PER_CENT);
+    const qty = (sign * notionalMc) / (priceCents * MC_PER_CENT);
     const feeMc = Math.round((notionalMc * params.feeBps) / 10_000);
     const cashMc = state.cashMc - feeMc;
     const died = cashMc <= 0;
@@ -158,9 +166,10 @@ export function stepDirectional(
   const equityMc = state.cashMc + unrealizedMc;
 
   // Liquidation is checked FIRST and unconditionally — patience (a forced
-  // wantLong=true from the caller, see cohort.ts's stepOneTrader) can only
-  // ever suppress the `!wantLong` disjunct below, never this equity check.
-  if (equityMc <= 0 || !wantLong) return closePosition(state, priceCents, params);
+  // direction from the caller, see cohort.ts's stepOneTrader) can only ever
+  // suppress the currentSide mismatch below, never this equity check.
+  const currentSide: Direction = state.qty > 0 ? "long" : "short";
+  if (equityMc <= 0 || direction !== currentSide) return closePosition(state, priceCents, params);
 
   const held: DirectionalStepState = { ...state, heldBars: state.heldBars + 1 };
   return { ...flatOutcome(held), equityMc };

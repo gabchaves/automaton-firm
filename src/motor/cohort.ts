@@ -8,10 +8,10 @@
 import {
   initDirectionalStepState, stepDirectional, MC_PER_CENT,
 } from "../trading/directional-step.js";
-import type { DirectionalStepState } from "../trading/directional-step.js";
+import type { DirectionalStepState, Direction } from "../trading/directional-step.js";
 import { randomGenome, mutateGenome } from "../trading/genome.js";
 import type { Genome } from "../trading/genome.js";
-import { genomeWantsLong } from "../trading/genome-decider.js";
+import { genomeDirection } from "../trading/genome-decider.js";
 import { mulberry32 } from "../trading/deciders.js";
 import { traderName } from "./names.js";
 import { BAR_MS } from "./feed.js";
@@ -62,10 +62,10 @@ export function hashSeed(...parts: number[]): number {
 }
 
 /**
- * Pure function of (seed, ts, cooldownBars): a coin flip that never desyncs
- * across restarts.
+ * Pure function of (seed, ts, cooldownBars): a three-way draw (long / short
+ * / flat, evenly split) that never desyncs across restarts.
  *
- * `cooldownBars` buckets `ts` onto a coarser grid so the flip only changes
+ * `cooldownBars` buckets `ts` onto a coarser grid so the draw only changes
  * once every `cooldownBars` bars, instead of every single 5m bar. Measured
  * bug this fixes: an unconditional per-bar flip made the random cohort
  * re-decide direction ~every bar, which — combined with leverage and
@@ -78,10 +78,13 @@ export function hashSeed(...parts: number[]): number {
  * already draws from and that both cohorts already sample identically — so
  * this closes the gap without introducing a new tunable constant.
  */
-export function randomWantsLong(deciderSeed: number, ts: number, cooldownBars: number): boolean {
+export function randomDirection(deciderSeed: number, ts: number, cooldownBars: number): Direction {
   const bucketMs = Math.max(1, cooldownBars) * BAR_MS;
   const bucketTs = Math.floor(ts / bucketMs) * bucketMs;
-  return mulberry32(hashSeed(deciderSeed, bucketTs % 2_147_483_647))() < 0.5;
+  const draw = mulberry32(hashSeed(deciderSeed, bucketTs % 2_147_483_647))();
+  if (draw < 1 / 3) return "long";
+  if (draw < 2 / 3) return "short";
+  return "flat";
 }
 
 export function traderEquityMc(t: TraderRuntime, closeBySymbol: Map<string, number>): number {
@@ -239,14 +242,14 @@ export function seedGeneration(opts: {
   return { runtime, events };
 }
 
-function decideWantLong(
+function decideDirection(
   t: TraderRuntime,
   ts: number,
   history: number[],
-): boolean {
+): Direction {
   return t.cohort === "evolved"
-    ? genomeWantsLong(history, history.length - 1, t.genome)
-    : randomWantsLong(t.deciderSeed, ts, t.genome.minHoldBars + 1);
+    ? genomeDirection(history, history.length - 1, t.genome)
+    : randomDirection(t.deciderSeed, ts, t.genome.minHoldBars + 1);
 }
 
 function buildStepEvents(
@@ -255,6 +258,8 @@ function buildStepEvents(
   generationId: string,
   close: number,
   cashBeforeMc: number,
+  direction: Direction,
+  preSide: Direction | null,
   outcome: ReturnType<typeof stepDirectional>,
   peakBookMc: number,
 ): MotorEventDraft[] {
@@ -264,7 +269,7 @@ function buildStepEvents(
     const notionalMc = Math.round(t.genome.leverage * t.genome.riskFraction * cashBeforeMc);
     events.push({
       ts, type: "trade_opened", traderId: t.id, generationId,
-      payload: { symbol: t.genome.symbol, priceCents: close, notionalMc, feeMc: outcome.feeMc },
+      payload: { symbol: t.genome.symbol, priceCents: close, notionalMc, feeMc: outcome.feeMc, direction },
     });
   }
 
@@ -274,6 +279,7 @@ function buildStepEvents(
       payload: {
         symbol: t.genome.symbol, priceCents: close,
         realizedPnlMc: outcome.realizedPnlMc, feeMc: outcome.feeMc, liquidated: outcome.liquidated,
+        direction: preSide,
       },
     });
   }
@@ -301,19 +307,21 @@ function stepOneTrader(
   if (close === undefined) return { trader: t, events: [] };
 
   const history = historyBySymbol.get(t.genome.symbol) ?? [];
-  let wantLong = decideWantLong(t, ts, history);
+  let direction = decideDirection(t, ts, history);
+  const preSide: Direction | null = t.step.inPosition ? (t.step.qty > 0 ? "long" : "short") : null;
   // Patience gene: hold through the exit signal until minHoldBars bars have
-  // passed since entry. Liquidation is NEVER suppressed — stepDirectional's
-  // equity check runs regardless of wantLong — and forceClose (HR firing,
-  // rotation) never even looks at wantLong, so patience cannot block either.
-  if (t.step.inPosition && t.step.heldBars < t.genome.minHoldBars) wantLong = true;
+  // passed since entry — forcing the CURRENT side, so it works for shorts
+  // too. Liquidation is NEVER suppressed — stepDirectional's equity check
+  // runs regardless of direction — and forceClose (HR firing, rotation)
+  // never even looks at direction, so patience cannot block either.
+  if (preSide !== null && t.step.heldBars < t.genome.minHoldBars) direction = preSide;
 
   const cashBeforeMc = t.step.cashMc;
   const params = { leverage: t.genome.leverage, riskFraction: t.genome.riskFraction, feeBps: FEE_BPS };
-  const outcome = stepDirectional(t.step, close, wantLong, params);
+  const outcome = stepDirectional(t.step, close, direction, params);
 
   const peakBookMc = Math.max(t.peakBookMc, outcome.equityMc);
-  const events = buildStepEvents(t, ts, generationId, close, cashBeforeMc, outcome, peakBookMc);
+  const events = buildStepEvents(t, ts, generationId, close, cashBeforeMc, direction, preSide, outcome, peakBookMc);
 
   const died = outcome.state.died;
   const trader: TraderRuntime = {
