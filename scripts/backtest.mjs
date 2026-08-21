@@ -27,15 +27,24 @@
  * see src/motor/cohort.ts's hashSeed — so a different WINDOW is the only way
  * to get a genuinely different, still fully reproducible, draw.
  *
- * Uso: node scripts/backtest.mjs [--days 90] [--end 2026-05-01] [--db path/to/backtest.db] [--json out.json] [--quiet]
+ * --llm adds a THIRD cohort (llm-governed) governed by the CEO/HR/CFO LLM
+ * agents (see docs/superpowers/specs/2026-08-20-motor-executive-agents-design.md)
+ * — opt-in only, since it spends real (small) inference cost. --llm-cap
+ * (default $0.50) is a hard ceiling on that spend for a single run of this
+ * script; scripts/backtest-sweep.mjs shares ONE cap across all its windows
+ * instead of resetting it per window.
+ *
+ * Uso: node scripts/backtest.mjs [--days 90] [--end 2026-05-01] [--db path/to/backtest.db] [--json out.json] [--quiet] [--llm] [--llm-cap 0.5]
  * Requer Node 22+ (better-sqlite3).
  */
 
 import path from "node:path";
 import fs from "node:fs";
+import os from "node:os";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { openMotorDb } from "../dist/motor/db.js";
 import { tick } from "../dist/motor/tick.js";
+import { createLlmClient, isLlmAvailable, SpendCap } from "../dist/motor/llm-agents.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT"];
@@ -56,6 +65,33 @@ function parseArgs(argv) {
     dbPath: get("--db", null),
     jsonPath: get("--json", null),
     quiet: has("--quiet"),
+    llm: has("--llm"),
+    llmCapUsd: Number(get("--llm-cap", "0.5")),
+  };
+}
+
+const DEFAULT_PROVIDER_CONFIG_PATH = path.join(
+  process.env.HOME ?? process.env.USERPROFILE ?? os.homedir(),
+  ".automaton", "inference-providers.json",
+);
+
+/**
+ * Opt-in only (--llm) — real inference cost, however small. `spendCap` is
+ * shared across every window a caller runs (backtest-sweep.mjs constructs
+ * ONE and passes it into every window's runBacktest call) so the cap
+ * bounds the TOTAL spend of a multi-window sweep, not just one window's.
+ */
+export function createLlmDeps(llmCapUsd, spendCap, providerConfigPath = DEFAULT_PROVIDER_CONFIG_PATH) {
+  if (!isLlmAvailable(providerConfigPath)) {
+    throw new Error(
+      `--llm requerido mas nenhum provider de inferencia resolve (checado em ${providerConfigPath}). ` +
+      `Configure ~/.automaton/inference-providers.json e exporte a API key antes de rodar com --llm.`,
+    );
+  }
+  return {
+    providerConfigPath,
+    client: createLlmClient(providerConfigPath),
+    spendCap: spendCap ?? new SpendCap(llmCapUsd),
   };
 }
 
@@ -86,7 +122,7 @@ function latestEquityMc(raw, cohort) {
  * Returns a plain-data summary — no console output — so callers decide how
  * (or whether) to print it.
  */
-export async function runBacktest({ days, endMs, dbPath, log = () => {} }) {
+export async function runBacktest({ days, endMs, dbPath, log = () => {}, llmDeps = null }) {
   const nowMs = endMs;
   const startMs = nowMs - days * MS_PER_DAY;
   const resolvedDbPath = dbPath ?? path.join(__dirname, "..", ".backtest", `backtest-${Date.now()}.db`);
@@ -104,7 +140,7 @@ export async function runBacktest({ days, endMs, dbPath, log = () => {} }) {
     db.setCursor(symbol, startMs - BAR_MS);
   }
 
-  const report = await tick({ db, nowMs, log });
+  const report = await tick({ db, nowMs, log, llmDeps: llmDeps ?? undefined });
 
   const evolvedGens = generationSummary(db.raw, "evolved");
   const randomGens = generationSummary(db.raw, "random");
@@ -115,6 +151,12 @@ export async function runBacktest({ days, endMs, dbPath, log = () => {} }) {
   const evolvedFinalMc = latestEquityMc(db.raw, "evolved");
   const randomFinalMc = latestEquityMc(db.raw, "random");
 
+  const llmGoverned = db.getLiveGeneration("llm-governed") !== null || generationSummary(db.raw, "llm-governed").length > 0;
+  const llmGens = llmGoverned ? generationSummary(db.raw, "llm-governed") : [];
+  const llmLive = llmGoverned ? db.getLiveGeneration("llm-governed") : null;
+  const llmRecordMc = llmGoverned ? Math.max(db.getBestEndedRecordMc("llm-governed"), llmLive?.peakEquityMc ?? 0) : null;
+  const llmFinalMc = llmGoverned ? latestEquityMc(db.raw, "llm-governed") : null;
+
   db.close();
 
   return {
@@ -123,11 +165,16 @@ export async function runBacktest({ days, endMs, dbPath, log = () => {} }) {
     evolvedGens, randomGens,
     evolvedRecordMc, randomRecordMc,
     evolvedFinalMc, randomFinalMc,
+    llmGoverned, llmGens, llmRecordMc, llmFinalMc,
+    llmSpentUsd: llmDeps ? llmDeps.spendCap.spentUsd : null,
   };
 }
 
 function printReport(result) {
-  const { days, startMs, endMs, dbPath, barsProcessed, evolvedGens, randomGens, evolvedRecordMc, randomRecordMc, evolvedFinalMc, randomFinalMc } = result;
+  const {
+    days, startMs, endMs, dbPath, barsProcessed, evolvedGens, randomGens, evolvedRecordMc, randomRecordMc,
+    evolvedFinalMc, randomFinalMc, llmGoverned, llmGens, llmRecordMc, llmFinalMc, llmSpentUsd,
+  } = result;
 
   console.log(`[backtest] janela: ${new Date(startMs).toISOString()} -> ${new Date(endMs).toISOString()} (${days} dias)`);
   console.log(`[backtest] db isolado (nao e o motor.db ao vivo): ${dbPath}`);
@@ -154,20 +201,38 @@ function printReport(result) {
   console.log("");
   console.log(`Resultado (pico): firma ${evolvedRecordMc > randomRecordMc ? "bateu" : "NAO bateu"} o controle aleatorio neste backtest.`);
   console.log(`Resultado (equity final): firma ${evolvedFinalMc > randomFinalMc ? "bateu" : "NAO bateu"} o controle aleatorio neste backtest.`);
+
+  if (llmGoverned) {
+    console.log("");
+    console.log(`Firma (llm-governed, CEO/RH/CFO): ${llmGens.length} geracao(oes)`);
+    for (const g of llmGens) {
+      const status = g.endedAt ? "encerrada" : "viva";
+      console.log(`  geracao ${g.genNumber}: pico ${fmtUsd(g.peakEquityMc)}, ${g.barsLived} barras, ${status} (${g.seedNote})`);
+    }
+    console.log(`  recorde geral (pico): ${fmtUsd(llmRecordMc)}`);
+    console.log(`  equity final da janela: ${fmtUsd(llmFinalMc)}`);
+    console.log(`  gasto real de inferencia nesta janela: $${llmSpentUsd?.toFixed(4) ?? "0.0000"}`);
+    console.log("");
+    console.log(`Resultado (pico): llm-governed ${llmRecordMc > randomRecordMc ? "bateu" : "NAO bateu"} o controle aleatorio.`);
+    console.log(`Resultado (pico): llm-governed ${llmRecordMc > evolvedRecordMc ? "bateu" : "NAO bateu"} a firma evoluida (mecanica).`);
+  }
 }
 
 async function main() {
-  const { days, endMs, dbPath, jsonPath, quiet } = parseArgs(process.argv.slice(2));
+  const { days, endMs, dbPath, jsonPath, quiet, llm, llmCapUsd } = parseArgs(process.argv.slice(2));
   if (!Number.isFinite(endMs)) {
     throw new Error(`--end invalido: nao parseou como data nem epoch ms`);
   }
 
   if (!quiet) {
     console.log(`[backtest] buscando candles reais na Binance e processando... (pode levar alguns minutos)`);
+    if (llm) console.log(`[backtest] --llm ativo: teto de gasto $${llmCapUsd.toFixed(2)}`);
   }
 
+  const llmDeps = llm ? createLlmDeps(llmCapUsd) : null;
+
   const result = await runBacktest({
-    days, endMs, dbPath,
+    days, endMs, dbPath, llmDeps,
     log: quiet ? () => {} : (l) => console.error(`[backtest] ${l}`),
   });
 

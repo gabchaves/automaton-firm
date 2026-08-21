@@ -1,12 +1,19 @@
 /**
  * Evidence-based HR review for the Motor's live firm.
  *
- * Runs on a schedule (Task 10's tick) against the evolved cohort only. Every
- * LIVE evolved trader is judged over the trailing window against a
- * benchmark built from ALL random-cohort traders born before `ts` — live
- * and dead alike, so a losing random trader still counts (excluding it
- * would be survivorship bias baked into the very benchmark meant to guard
- * against it).
+ * Runs on a schedule (Task 10's tick) against the evolved and llm-governed
+ * cohorts — never random, which is the benchmark, not a reviewed cohort.
+ * Every LIVE trader is judged over the trailing window against a benchmark
+ * built from ALL random-cohort traders born before `ts` — live and dead
+ * alike, so a losing random trader still counts (excluding it would be
+ * survivorship bias baked into the very benchmark meant to guard against
+ * it).
+ *
+ * `runHrReview` is the rule-based path (`decideHrActions`), unchanged.
+ * `computeHrAssessments` + `applyHrDecision` are the same logic split in
+ * two so the llm-governed cohort can resolve its decision ASYNCHRONOUSLY
+ * (an LLM call, journaled — see llm-agents.ts) before tick.ts's
+ * synchronous db.tx(), then apply it through the identical mechanics.
  *
  * Firing books the trader's remaining equity to the firm's reserve and
  * marks it "fired" (never touching its trades again). Hiring spends that
@@ -19,7 +26,7 @@
  */
 
 import { assessTrader, decideHrActions } from "../trading/hr-evaluation.js";
-import type { HrConfig, TraderEvidence } from "../trading/hr-evaluation.js";
+import type { HrAssessment, HrConfig, HrDecision, TraderEvidence } from "../trading/hr-evaluation.js";
 import { forceClose, initDirectionalStepState } from "../trading/directional-step.js";
 import { mutateGenome, randomGenome } from "../trading/genome.js";
 import {
@@ -242,6 +249,28 @@ function nextSlot(traders: TraderRuntime[]): number {
   return traders.reduce((max, t) => Math.max(max, t.slot), -1) + 1;
 }
 
+/**
+ * Split from `applyHrDecision` so a caller that needs to resolve the
+ * decision ASYNCHRONOUSLY (the llm-governed cohort's LLM-backed HR, which
+ * must run before tick.ts's synchronous db.tx()) can compute the exact same
+ * evidence the rule-based path sees, without needing its own copy of this
+ * logic. Pure DB reads — safe to call outside a transaction.
+ */
+export function computeHrAssessments(
+  db: MotorDb,
+  evolved: CohortRuntime,
+  random: CohortRuntime,
+  ts: number,
+  closeBySymbol: Map<string, number>,
+): { assessments: HrAssessment[]; benchmarkCents: number } {
+  const windowStart = Math.max(ts - HR_WINDOW_MS, evolved.startedAt);
+  const benchmarkCents = computeBenchmarkCents(db, random, ts, windowStart, closeBySymbol);
+  const liveTraders = evolved.traders.filter((t) => t.status === "live");
+  const assessments = liveTraders.map((t) =>
+    assessTrader(buildEvidence(db, t, windowStart, ts, benchmarkCents, closeBySymbol), MOTOR_HR_CONFIG));
+  return { assessments, benchmarkCents };
+}
+
 export function runHrReview(deps: {
   db: MotorDb;
   evolved: CohortRuntime;
@@ -251,14 +280,35 @@ export function runHrReview(deps: {
   mkId: () => string;
 }): HrReviewResult {
   const { db, evolved, random, ts, closeBySymbol, mkId } = deps;
-  const generationId = evolved.generationId;
-  const windowStart = Math.max(ts - HR_WINDOW_MS, evolved.startedAt);
-  const benchmarkCents = computeBenchmarkCents(db, random, ts, windowStart, closeBySymbol);
+  const { assessments, benchmarkCents } = computeHrAssessments(db, evolved, random, ts, closeBySymbol);
+  const decision = decideHrActions(assessments);
+  return applyHrDecision({ db, evolved, random, ts, closeBySymbol, mkId, assessments, benchmarkCents, decision });
+}
 
-  const liveTraders = evolved.traders.filter((t) => t.status === "live");
-  const assessments = liveTraders.map((t) =>
-    assessTrader(buildEvidence(db, t, windowStart, ts, benchmarkCents, closeBySymbol), MOTOR_HR_CONFIG));
-  const decisions = decideHrActions(assessments);
+/**
+ * The mechanical half of an HR review: given an already-decided
+ * `HrDecision` (rule-based via `decideHrActions`, or LLM-backed and
+ * resolved ahead of time — see llm-agents.ts), fire/promote/rotate/hire.
+ * `deployFraction` (0-1, default 1 = today's always-deploy behavior) scales
+ * each hire's stake — the llm-governed cohort's CFO decision point.
+ */
+export function applyHrDecision(deps: {
+  db: MotorDb;
+  evolved: CohortRuntime;
+  random: CohortRuntime;
+  ts: number;
+  closeBySymbol: Map<string, number>;
+  mkId: () => string;
+  assessments: HrAssessment[];
+  benchmarkCents: number;
+  decision: HrDecision;
+  deployFraction?: number;
+}): HrReviewResult {
+  const {
+    db, evolved, ts, closeBySymbol, mkId, assessments, benchmarkCents, decision: decisions,
+    deployFraction = 1,
+  } = deps;
+  const generationId = evolved.generationId;
   const assessmentById = new Map(assessments.map((a) => [a.traderId, a]));
 
   const events: MotorEventDraft[] = [];
@@ -301,16 +351,23 @@ export function runHrReview(deps: {
     forceRandomForNextHire = true;
   }
 
-  // Hire replacements while the reserve can afford it and there is room on
-  // the roster. Each new hire's mutation parent is the best genome among
-  // the traders still live at that point — except the first hire after a
-  // rotation, which is forced to a fresh randomGenome instead (see
-  // hireReplacement's forceRandomGenome doc comment).
-  while (reserveMc >= MIN_HIRE_STAKE_MC) {
+  // Hire replacements while the DEPLOYABLE slice of the reserve can afford
+  // it and there is room on the roster. deployFraction=1 (default) reserves
+  // 100% of reserveMc as deployable, reproducing today's always-deploy
+  // behavior exactly; the llm-governed cohort's CFO can hold cash back by
+  // deploying less. Computed ONCE up front (not re-derived from reserveMc
+  // per iteration) so deployFraction=0 correctly holds everything — cannot
+  // loop forever hiring zero-stake traders. Each new hire's mutation parent
+  // is the best genome among the traders still live at that point — except
+  // the first hire after a rotation, which is forced to a fresh
+  // randomGenome instead (see hireReplacement's forceRandomGenome doc
+  // comment).
+  let deployableMc = Math.round(reserveMc * deployFraction);
+  while (deployableMc >= MIN_HIRE_STAKE_MC) {
     const liveCount = traders.filter((t) => t.status === "live").length;
     if (liveCount >= ROSTER_SIZE) break;
 
-    const stakeMc = Math.min(reserveMc, TRADER_START_MC);
+    const stakeMc = Math.min(deployableMc, TRADER_START_MC);
     const liveOnly: CohortRuntime = { ...evolved, traders: traders.filter((t) => t.status === "live") };
     const slot = nextSlot(traders);
     const hired = hireReplacement(
@@ -319,6 +376,7 @@ export function runHrReview(deps: {
     forceRandomForNextHire = false;
 
     reserveMc -= stakeMc;
+    deployableMc -= stakeMc;
     traders = [...traders, hired.trader];
     events.push(hired.event);
   }

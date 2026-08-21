@@ -4,7 +4,7 @@ import { tmpdir } from "os";
 import { join } from "path";
 import { openMotorDb } from "../../motor/db.js";
 import type { MotorDb } from "../../motor/db.js";
-import { HR_WINDOW_MS, MOTOR_HR_CONFIG, ROTATION_AGE_MS, runHrReview } from "../../motor/hr.js";
+import { HR_WINDOW_MS, MOTOR_HR_CONFIG, ROTATION_AGE_MS, runHrReview, applyHrDecision } from "../../motor/hr.js";
 import { firmEquityMc, hashSeed, seedGeneration, TRADER_START_MC } from "../../motor/cohort.js";
 import { randomGenome } from "../../trading/genome.js";
 
@@ -229,6 +229,66 @@ describe("runHrReview", () => {
       const result = runHrReview({ db: d, evolved: aged, random, ts, closeBySymbol: new Map(), mkId });
 
       expect(result.events.some((e) => e.type === "trader_rotated")).toBe(false);
+    });
+  });
+
+  // The llm-governed cohort's CFO decision point (see llm-agents.ts) — a
+  // deployFraction < 1 holds part of the reserve back instead of always
+  // deploying it all. Isolated from HR's fire/promote logic: an empty
+  // decision + a pre-set reserve + an understaffed roster exercises only
+  // the hire loop.
+  describe("applyHrDecision deployFraction (CFO cash policy)", () => {
+    const EMPTY_DECISION = { promote: [], retire: [], hold: [] };
+
+    function understaffed(reserveMc: number) {
+      const { evolved, random } = cohorts();
+      // Mark one seat "fired" (no longer live) so there's room to hire, and
+      // set the reserve directly — isolates the hire loop from needing a
+      // real fire to bank money into it first.
+      const [gone, ...rest] = evolved.traders;
+      const roster = { ...evolved, traders: [{ ...gone, status: "fired" as const }, ...rest], reserveMc };
+      return { evolved: roster, random };
+    }
+
+    test("deployFraction=1 (default) reproduces today's always-deploy-fully behavior", () => {
+      const d = fresh();
+      const { evolved, random } = understaffed(20_000_000); // $200 reserve, one open seat
+      const result = applyHrDecision({
+        db: d, evolved, random, ts, closeBySymbol: new Map(), mkId,
+        assessments: [], benchmarkCents: 0, decision: EMPTY_DECISION,
+      });
+      const hired = result.events.find((e) => e.type === "trader_hired");
+      expect(hired).toBeDefined();
+      expect((hired!.payload as { stakeMc: number }).stakeMc).toBe(TRADER_START_MC);
+      expect(result.evolved.reserveMc).toBe(20_000_000 - TRADER_START_MC);
+    });
+
+    test("deployFraction=0.5 halves what's available to deploy this review", () => {
+      const d = fresh();
+      const { evolved, random } = understaffed(20_000_000);
+      const result = applyHrDecision({
+        db: d, evolved, random, ts, closeBySymbol: new Map(), mkId,
+        assessments: [], benchmarkCents: 0, decision: EMPTY_DECISION, deployFraction: 0.5,
+      });
+      const hired = result.events.find((e) => e.type === "trader_hired");
+      expect(hired).toBeDefined();
+      // Half of $200 deployable = $100, exactly the min hire stake — one
+      // hire exhausts it, no second hire even though a seat remains open.
+      expect((hired!.payload as { stakeMc: number }).stakeMc).toBe(10_000_000);
+      expect(result.events.filter((e) => e.type === "trader_hired").length).toBe(1);
+      // The UNDEPLOYED half stays in reserve, not spent.
+      expect(result.evolved.reserveMc).toBe(20_000_000 - 10_000_000);
+    });
+
+    test("deployFraction=0 holds all cash — no hire, and (the bug this guards) no infinite loop", () => {
+      const d = fresh();
+      const { evolved, random } = understaffed(20_000_000);
+      const result = applyHrDecision({
+        db: d, evolved, random, ts, closeBySymbol: new Map(), mkId,
+        assessments: [], benchmarkCents: 0, decision: EMPTY_DECISION, deployFraction: 0,
+      });
+      expect(result.events.some((e) => e.type === "trader_hired")).toBe(false);
+      expect(result.evolved.reserveMc).toBe(20_000_000); // untouched
     });
   });
 });

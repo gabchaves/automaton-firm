@@ -456,3 +456,92 @@ never which side of the market the firm could take, it's that public OHLCV
 signals don't predict either direction.** Short-selling stays in the motor as
 a real, tested, no-longer-missing capability — it closes an honest structural
 gap — but it is not reported as a source of profit.
+
+## LLM executive agents: CEO / HR / CFO (2026-08-20, live era)
+
+**Question:** does an LLM-governed executive layer — a CEO biasing which
+gene families the next generation mutates toward, an HR director deciding
+promote/retire/hold, a CFO deciding how much of the cash reserve to deploy
+on new hires — beat the existing deterministic, rule-based system? This is
+NOT "does an LLM predict price" (Experiment 1, already null) — it's "does an
+LLM make better *selection and capital-allocation* decisions than a cold,
+evidence-gated rule."
+
+**Setup:** design at
+`docs/superpowers/specs/2026-08-20-motor-executive-agents-design.md`. A
+third cohort, `llm-governed`, parallel to `evolved`/`random` — trades
+identically to `evolved` (same `genomeDirection`, no LLM in the per-bar
+path); only generation-level policy is LLM-backed. Real inference
+(fal.ai/Gemini 3 Flash), reviewing every 3 days instead of daily (a
+deliberate cost-bounding choice, not free) — spend capped and journaled
+(replaying an already-processed window is free; a new window costs real,
+small money). Same 6-window sweep as every other entry here.
+
+**Result 1 — peak-edge (the clean metric) shows nothing, as always:**
+identical 50% win rate, mean still ≈ flat, across every configuration
+tested in this experiment (llm-governed, and two mechanical control variants
+built below). Peak is dominated by a shared early-window move common to
+every cohort/config — none of what follows shows up in it at all.
+
+**Result 2 — final-edge looked like a real, large, consistent LLM win:**
+llm-governed beat `evolved` (mechanical, daily-reviewed HR) by +6.65pp to
++13.89pp (mean ≈ +10.7pp), **100% of windows**. This is the kind of number
+that would normally be reported as "the LLM works." It was not reported as
+that, because of what came next.
+
+**The check this project's whole methodology exists to run:** llm-governed
+reviews every 3 days; `evolved` reviews daily. Given this session already
+found ONE fee-churn bug from over-frequent re-decision (the random control's
+per-bar coin flip, entry above) and the project has found this exact
+confound twice before that (Experiment 5), a coarser review cadence winning
+was the first suspect, not a conclusion. Two zero-cost, zero-LLM control
+sims were built (reusing the real pipeline's exact functions —
+`computeHrAssessments`, `applyHrDecision`, `decideHrActions` — against the
+bars already fetched into the sweep DBs; a re-simulated `random` cohort was
+verified byte-identical to the real one in all 6 windows before trusting
+either control):
+
+- **`mechanical-slow`**: rule-based `decideHrActions`, but on llm-governed's
+  same 3-day cadence, deployFraction fixed at 1 (today's always-deploy). If
+  cadence alone explained the edge, this should track llm-governed closely.
+  It did not: it beat `evolved` in only 1 of 6 windows and was **worse than
+  evolved in the other 5** — cadence alone does not explain the edge, and
+  on its own actively hurts.
+- **`mechanical + deployFraction=0.3`**: same rule-based HR, same 3-day
+  cadence, but capital deployment fixed at a conservative 30% instead of
+  100% (roughly the real LLM CFO's observed average). This is where it
+  breaks open: **this alone beat or matched llm-governed's actual result in
+  3 of 6 windows**, and closed most of the remaining gap in the other 3.
+
+| | evolved (daily, 1.0) | mechanical (3d, 1.0) | mechanical (3d, 0.3) | llm-governed (3d, real) |
+|---|---|---|---|---|
+| W5 | $612.42 | $494.20 | **$721.48** | $678.95 |
+| W4 | $577.06 | $489.83 | $613.34 | $714.47 |
+| W3 | $644.20 | $665.41 | $707.94 | $783.08 |
+| W2 | $583.21 | $569.50 | $672.01 | $672.01 |
+| W1 | $571.61 | $564.76 | **$661.42** | $657.77 |
+| W0 | $633.83 | $376.15 | $643.07 | $760.03 |
+
+**Finding: the apparent LLM edge is mostly a capital-conservatism effect,
+not a judgment effect.** A fixed, mechanical, zero-cost, zero-intelligence
+rule — "deploy 30% of the reserve per review instead of 100%" — recovers
+nearly all of the measured advantage, for free. The residual gap beyond
+that (llm-governed vs. mechanical@0.3) is real in 3 of 6 windows
+(+$75–117) and essentially absent or reversed in the other 3 — with N=6,
+nowhere near this project's own bar for a skill claim (Experiment 5's
+≥200-trial, clear-majority standard). **Same pattern as Experiment 5 and
+the random-control fix, found a third time, one layer up the stack:**
+sitting on cash (or trading less, or re-deciding less often) looks like
+skill in a fee-punishing simulation regardless of who or what decided to
+do less. The LLM executive layer is not shown to add judgment beyond what a
+static capital-allocation rule already provides.
+
+**Secondary finding, unrelated to the LLM question, worth its own future
+test:** a fixed conservative deployment fraction on the existing mechanical
+`evolved` HR is itself a free, untested lever — it was never part of this
+project's search space before. It is explicitly NOT recommended for
+deployment from this measurement alone (N=6, not out-of-sample validated,
+discovered post-hoc while investigating something else — exactly the
+condition under which this project's own rules say not to trust a number).
+It would need its own pre-registered, disjoint-window test before being
+believed.

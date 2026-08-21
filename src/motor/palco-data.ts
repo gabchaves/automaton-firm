@@ -9,6 +9,7 @@
 import type BetterSqlite3 from "better-sqlite3";
 import { formatEventPt } from "./palco-format.js";
 import { GEN_START_MC, TRADER_START_MC } from "./cohort.js";
+import type { Cohort } from "./cohort.js";
 
 export interface PalcoSnapshot {
   generatedAt: number; // caller-provided nowMs (no Date.now in the module)
@@ -75,8 +76,6 @@ const HR_POLICY_PT =
 const ORG_HISTORY_TYPES = [
   "trader_hired", "trader_fired", "trader_rotated", "trader_promoted", "gen_started", "gen_ended",
 ];
-
-type Cohort = "evolved" | "random";
 
 interface WindowStats {
   pnl1hMc: number;
@@ -256,7 +255,10 @@ function generationCount(raw: BetterSqlite3.Database, cohort: Cohort): number {
 }
 
 function computeCards(raw: BetterSqlite3.Database): PalcoSnapshot["cards"] {
-  const live: Record<Cohort, ReturnType<typeof liveGeneration>> = {
+  // Palco's cards show evolved/random only — llm-governed (when it exists)
+  // is a research cohort validated via backtest-sweep.mjs, not on the live
+  // front yet. See docs/superpowers/specs/2026-08-20-motor-executive-agents-design.md.
+  const live: Record<"evolved" | "random", ReturnType<typeof liveGeneration>> = {
     evolved: liveGeneration(raw, "evolved"),
     random: liveGeneration(raw, "random"),
   };

@@ -43,7 +43,7 @@ async function runLoop(): Promise<void> {
 
 function status(): void {
   const db = openMotorDb(defaultDbPath());
-  for (const cohort of ["evolved", "random"] as const) {
+  for (const cohort of ["evolved", "random", "llm-governed"] as const) {
     const gen = db.getLiveGeneration(cohort);
     const record = db.getBestEndedRecordMc(cohort);
     console.log(`${cohort}: gen=${gen?.genNumber ?? "-"} peak=${fmtUsd(gen?.peakEquityMc ?? 0)} bestEndedRecord=${fmtUsd(record)}`);

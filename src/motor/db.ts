@@ -8,15 +8,16 @@ import Database from "better-sqlite3";
 import type BetterSqlite3 from "better-sqlite3";
 import fs from "fs";
 import path from "path";
+import type { Cohort } from "./cohort.js";
 
 export interface GenerationRow {
-  id: string; cohort: "evolved" | "random"; genNumber: number;
+  id: string; cohort: Cohort; genNumber: number;
   startedAt: number; endedAt: number | null;
   peakEquityMc: number; peakAt: number; barsLived: number; seedNote: string;
 }
 export interface TraderRow {
   id: string; generationId: string; slot: number; name: string;
-  cohort: "evolved" | "random"; genomeJson: string; deciderSeed: number;
+  cohort: Cohort; genomeJson: string; deciderSeed: number;
   stateJson: string; bookMc: number; peakBookMc: number;
   realizedPnlMc: number; tradesCount: number;
   status: "live" | "dead" | "fired"; bornAt: number; diedAt: number | null;
@@ -39,8 +40,8 @@ export interface MotorDb {
   getBarClose(symbol: string, ts: number): number | null;
   insertGeneration(row: GenerationRow): void;
   updateGeneration(id: string, patch: Partial<GenerationRow>): void;
-  getLiveGeneration(cohort: "evolved" | "random"): GenerationRow | null;
-  getBestEndedRecordMc(cohort: "evolved" | "random"): number;
+  getLiveGeneration(cohort: Cohort): GenerationRow | null;
+  getBestEndedRecordMc(cohort: Cohort): number;
   insertTrader(row: TraderRow): void;
   updateTrader(id: string, patch: Partial<TraderRow>): void;
   listTradersByGeneration(generationId: string): TraderRow[];
@@ -51,6 +52,16 @@ export interface MotorDb {
   insertTraderSnapshot(ts: number, traderId: string, equityMc: number): void;
   getTraderEquityAt(traderId: string, ts: number): number | null; // latest snapshot <= ts
   countTradeCloses(traderId: string, fromTs: number, toTs: number): number;
+  getLlmDecision(genNumber: number, ts: number, role: LlmRole): LlmDecisionRow | null;
+  insertLlmDecision(row: LlmDecisionRow): void;
+}
+
+export type LlmRole = "ceo" | "hr" | "cfo";
+
+export interface LlmDecisionRow {
+  genNumber: number; ts: number; role: LlmRole;
+  decisionJson: string; rawResponse: string;
+  providerId: string; modelId: string; costCredits: number; createdAt: number;
 }
 
 const SCHEMA = `
@@ -87,17 +98,30 @@ CREATE TABLE IF NOT EXISTS trader_snapshots (
   ts INTEGER NOT NULL, trader_id TEXT NOT NULL, equity_mc INTEGER NOT NULL,
   PRIMARY KEY (ts, trader_id)
 );
+-- LLM executive-agent decisions (llm-governed cohort only). Keyed by
+-- (gen_number, ts, role) rather than generation_id — those two are what
+-- stays identical across a replay of the same historical window, so a
+-- second run of an already-processed window finds this row and skips
+-- inference entirely. See
+-- docs/superpowers/specs/2026-08-20-motor-executive-agents-design.md.
+CREATE TABLE IF NOT EXISTS llm_decisions (
+  gen_number INTEGER NOT NULL, ts INTEGER NOT NULL, role TEXT NOT NULL,
+  decision_json TEXT NOT NULL, raw_response TEXT NOT NULL,
+  provider_id TEXT NOT NULL, model_id TEXT NOT NULL,
+  cost_credits REAL NOT NULL, created_at INTEGER NOT NULL,
+  PRIMARY KEY (gen_number, ts, role)
+);
 `;
 
 interface GenerationRowDb {
-  id: string; cohort: "evolved" | "random"; gen_number: number;
+  id: string; cohort: Cohort; gen_number: number;
   started_at: number; ended_at: number | null;
   peak_equity_mc: number; peak_at: number; bars_lived: number; seed_note: string;
 }
 
 interface TraderRowDb {
   id: string; generation_id: string; slot: number; name: string;
-  cohort: "evolved" | "random"; genome_json: string; decider_seed: number;
+  cohort: Cohort; genome_json: string; decider_seed: number;
   state_json: string; book_mc: number; peak_book_mc: number;
   realized_pnl_mc: number; trades_count: number;
   status: "live" | "dead" | "fired"; born_at: number; died_at: number | null;
@@ -106,6 +130,12 @@ interface TraderRowDb {
 interface EventRowDb {
   id: number; ts: number; type: string;
   trader_id: string | null; generation_id: string | null; payload_json: string;
+}
+
+interface LlmDecisionRowDb {
+  gen_number: number; ts: number; role: LlmRole;
+  decision_json: string; raw_response: string;
+  provider_id: string; model_id: string; cost_credits: number; created_at: number;
 }
 
 function mapGeneration(row: GenerationRowDb): GenerationRow {
@@ -131,6 +161,15 @@ function mapEvent(row: EventRowDb): EventRow {
   return {
     id: row.id, ts: row.ts, type: row.type,
     traderId: row.trader_id, generationId: row.generation_id, payloadJson: row.payload_json,
+  };
+}
+
+function mapLlmDecision(row: LlmDecisionRowDb): LlmDecisionRow {
+  return {
+    genNumber: row.gen_number, ts: row.ts, role: row.role,
+    decisionJson: row.decision_json, rawResponse: row.raw_response,
+    providerId: row.provider_id, modelId: row.model_id,
+    costCredits: row.cost_credits, createdAt: row.created_at,
   };
 }
 
@@ -239,6 +278,14 @@ export function openMotorDb(dbPath: string): MotorDb {
       `SELECT COUNT(*) AS n FROM events WHERE type = 'trade_closed'
        AND trader_id = ? AND ts > ? AND ts <= ?`,
     ),
+    getLlmDecision: raw.prepare(
+      "SELECT * FROM llm_decisions WHERE gen_number = ? AND ts = ? AND role = ?",
+    ),
+    insertLlmDecision: raw.prepare(
+      `INSERT INTO llm_decisions
+        (gen_number, ts, role, decision_json, raw_response, provider_id, model_id, cost_credits, created_at)
+       VALUES (@genNumber, @ts, @role, @decisionJson, @rawResponse, @providerId, @modelId, @costCredits, @createdAt)`,
+    ),
   };
 
   return {
@@ -305,12 +352,12 @@ export function openMotorDb(dbPath: string): MotorDb {
       raw.prepare(update.sql).run(...update.values, id);
     },
 
-    getLiveGeneration(cohort: "evolved" | "random"): GenerationRow | null {
+    getLiveGeneration(cohort: Cohort): GenerationRow | null {
       const row = stmts.getLiveGeneration.get(cohort) as GenerationRowDb | undefined;
       return row ? mapGeneration(row) : null;
     },
 
-    getBestEndedRecordMc(cohort: "evolved" | "random"): number {
+    getBestEndedRecordMc(cohort: Cohort): number {
       const row = stmts.getBestEndedRecordMc.get(cohort) as { best: number | null };
       return row.best ?? 0;
     },
@@ -360,6 +407,15 @@ export function openMotorDb(dbPath: string): MotorDb {
     countTradeCloses(traderId: string, fromTs: number, toTs: number): number {
       const row = stmts.countTradeCloses.get(traderId, fromTs, toTs) as { n: number };
       return row.n;
+    },
+
+    getLlmDecision(genNumber: number, ts: number, role: LlmRole): LlmDecisionRow | null {
+      const row = stmts.getLlmDecision.get(genNumber, ts, role) as LlmDecisionRowDb | undefined;
+      return row ? mapLlmDecision(row) : null;
+    },
+
+    insertLlmDecision(row: LlmDecisionRow): void {
+      stmts.insertLlmDecision.run(row);
     },
   };
 }

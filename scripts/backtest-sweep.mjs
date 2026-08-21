@@ -18,14 +18,21 @@
  * had more chances to spike. Final equity is a fairer apples-to-apples
  * comparison of where the money actually ended up.
  *
- * Uso: node scripts/backtest-sweep.mjs [--windows 6] [--days 90]
+ * --llm adds the llm-governed cohort (CEO/HR/CFO agents) to every window,
+ * sharing ONE SpendCap across the whole sweep — the cap bounds the sweep's
+ * TOTAL spend, not each window independently. Opt-in only; real (small)
+ * inference cost. See createLlmDeps in backtest.mjs and
+ * docs/superpowers/specs/2026-08-20-motor-executive-agents-design.md.
+ *
+ * Uso: node scripts/backtest-sweep.mjs [--windows 6] [--days 90] [--llm] [--llm-cap 0.5]
  * Requer Node 22 (better-sqlite3) — same as backtest.mjs.
  */
 
 import path from "node:path";
 import fs from "node:fs";
 import { fileURLToPath } from "node:url";
-import { runBacktest } from "./backtest.mjs";
+import { runBacktest, createLlmDeps } from "./backtest.mjs";
+import { SpendCap } from "../dist/motor/llm-agents.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const MS_PER_DAY = 86_400_000;
@@ -36,9 +43,12 @@ function parseArgs(argv) {
     const i = argv.indexOf(flag);
     return i === -1 ? fallback : argv[i + 1];
   };
+  const has = (flag) => argv.includes(flag);
   return {
     windows: Number(get("--windows", "6")),
     days: Number(get("--days", "90")),
+    llm: has("--llm"),
+    llmCapUsd: Number(get("--llm-cap", "0.5")),
   };
 }
 
@@ -70,18 +80,24 @@ function stdev(xs) {
 }
 
 async function main() {
-  const { windows: windowCount, days } = parseArgs(process.argv.slice(2));
+  const { windows: windowCount, days, llm, llmCapUsd } = parseArgs(process.argv.slice(2));
   const windows = buildWindows(windowCount, days);
 
   console.log(`[sweep] ${windowCount} janelas disjuntas de ${days} dias cada (${windowCount * days} dias no total, nao sobrepostas)`);
+  // ONE SpendCap shared by every window below — bounds the sweep's TOTAL
+  // spend, not each window independently (a per-window cap would let total
+  // spend scale with windowCount, defeating the point of a hard ceiling).
+  const spendCap = llm ? new SpendCap(llmCapUsd) : null;
+  const llmDepsTemplate = llm ? createLlmDeps(llmCapUsd, spendCap) : null;
+  if (llm) console.log(`[sweep] --llm ativo: teto de gasto COMPARTILHADO entre todas as janelas: $${llmCapUsd.toFixed(2)}`);
   console.log("");
 
   const results = [];
   for (const w of windows) {
     process.stderr.write(`[sweep] rodando ${w.label}... `);
     const dbPath = path.join(__dirname, "..", ".backtest", `sweep-${w.endMs}.db`);
-    const result = await runBacktest({ days: w.days, endMs: w.endMs, dbPath, log: () => {} });
-    process.stderr.write(`ok (${result.barsProcessed} barras)\n`);
+    const result = await runBacktest({ days: w.days, endMs: w.endMs, dbPath, log: () => {}, llmDeps: llmDepsTemplate });
+    process.stderr.write(`ok (${result.barsProcessed} barras${llm ? `, gasto acumulado $${spendCap.spentUsd.toFixed(4)}` : ""})\n`);
     results.push({ label: w.label, ...result });
   }
 
@@ -91,6 +107,9 @@ async function main() {
   const rows = results.map((r) => {
     const peakEdgePct = edgePct(r.evolvedRecordMc, r.randomRecordMc);
     const finalEdgePct = edgePct(r.evolvedFinalMc, r.randomFinalMc);
+    const llmPeakEdgePct = r.llmGoverned ? edgePct(r.llmRecordMc, r.randomRecordMc) : null;
+    const llmFinalEdgePct = r.llmGoverned ? edgePct(r.llmFinalMc, r.randomFinalMc) : null;
+    const llmVsEvolvedPeakPct = r.llmGoverned ? edgePct(r.llmRecordMc, r.evolvedRecordMc) : null;
     return {
       label: r.label,
       start: new Date(r.startMs).toISOString().slice(0, 10),
@@ -99,6 +118,9 @@ async function main() {
       finalEdgePct,
       evolvedGens: r.evolvedGens.length,
       randomGens: r.randomGens.length,
+      llmGoverned: r.llmGoverned,
+      llmPeakEdgePct, llmFinalEdgePct, llmVsEvolvedPeakPct,
+      llmGens: r.llmGoverned ? r.llmGens.length : null,
     };
   });
 
@@ -106,6 +128,11 @@ async function main() {
     console.log(
       `${row.label.padEnd(24)} ${row.start} -> ${row.end}  peak-edge ${row.peakEdgePct >= 0 ? "+" : ""}${row.peakEdgePct.toFixed(2)}%  final-edge ${row.finalEdgePct >= 0 ? "+" : ""}${row.finalEdgePct.toFixed(2)}%  (gens: firma ${row.evolvedGens}, controle ${row.randomGens})`,
     );
+    if (row.llmGoverned) {
+      console.log(
+        `${"".padEnd(24)}   llm-governed vs controle: peak-edge ${row.llmPeakEdgePct >= 0 ? "+" : ""}${row.llmPeakEdgePct.toFixed(2)}%  final-edge ${row.llmFinalEdgePct >= 0 ? "+" : ""}${row.llmFinalEdgePct.toFixed(2)}%  |  vs firma (mecanica): ${row.llmVsEvolvedPeakPct >= 0 ? "+" : ""}${row.llmVsEvolvedPeakPct.toFixed(2)}pp  (gens: ${row.llmGens})`,
+      );
+    }
   }
 
   const peakEdges = rows.map((r) => r.peakEdgePct);
@@ -117,11 +144,28 @@ async function main() {
   console.log("=== AGREGADO ===");
   console.log(`peak-edge:  media ${mean(peakEdges).toFixed(2)}% (~${annualize(mean(peakEdges), days).toFixed(2)}%/ano), desvio-padrao ${stdev(peakEdges).toFixed(2)}pp, firma venceu em ${(peakWinRate * 100).toFixed(0)}% das janelas`);
   console.log(`final-edge: media ${mean(finalEdges).toFixed(2)}% (~${annualize(mean(finalEdges), days).toFixed(2)}%/ano), desvio-padrao ${stdev(finalEdges).toFixed(2)}pp, firma venceu em ${(finalWinRate * 100).toFixed(0)}% das janelas`);
+
+  if (llm) {
+    const llmPeakEdges = rows.map((r) => r.llmPeakEdgePct).filter((v) => v !== null);
+    const llmFinalEdges = rows.map((r) => r.llmFinalEdgePct).filter((v) => v !== null);
+    const llmVsEvolved = rows.map((r) => r.llmVsEvolvedPeakPct).filter((v) => v !== null);
+    const llmPeakWinRate = llmPeakEdges.filter((e) => e > 0).length / llmPeakEdges.length;
+    const llmVsEvolvedWinRate = llmVsEvolved.filter((e) => e > 0).length / llmVsEvolved.length;
+    console.log("");
+    console.log(`llm-governed peak-edge vs controle:  media ${mean(llmPeakEdges).toFixed(2)}% (~${annualize(mean(llmPeakEdges), days).toFixed(2)}%/ano), desvio-padrao ${stdev(llmPeakEdges).toFixed(2)}pp, venceu em ${(llmPeakWinRate * 100).toFixed(0)}% das janelas`);
+    console.log(`llm-governed final-edge vs controle: media ${mean(llmFinalEdges).toFixed(2)}%`);
+    console.log(`llm-governed vs firma (mecanica), peak: media ${mean(llmVsEvolved).toFixed(2)}pp, venceu em ${(llmVsEvolvedWinRate * 100).toFixed(0)}% das janelas`);
+    console.log(`gasto total de inferencia no sweep: $${spendCap.spentUsd.toFixed(4)} (teto: $${llmCapUsd.toFixed(2)})`);
+  }
+
   console.log("");
   console.log(`N=${windowCount} janelas — amostra pequena, tratar desvio-padrao e win-rate como indicativos, nao como teste de significancia formal.`);
 
   const outPath = path.join(__dirname, "..", ".backtest", "sweep-results.json");
-  fs.writeFileSync(outPath, JSON.stringify({ windows: rows, days, generatedAt: Date.now() }, null, 2));
+  fs.writeFileSync(outPath, JSON.stringify({
+    windows: rows, days, generatedAt: Date.now(),
+    llmSpentUsd: llm ? spendCap.spentUsd : null,
+  }, null, 2));
   console.log("");
   console.log(`[sweep] resultado salvo em ${outPath}`);
 }

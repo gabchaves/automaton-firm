@@ -10,7 +10,7 @@ import type { MotorDb } from "./db.js";
 
 const EMPTY_PAYLOAD = z.strictObject({});
 
-const COHORT = z.enum(["evolved", "random"]);
+const COHORT = z.enum(["evolved", "random", "llm-governed"]);
 
 export const EVENT_PAYLOAD_SCHEMAS = {
   motor_started: EMPTY_PAYLOAD,

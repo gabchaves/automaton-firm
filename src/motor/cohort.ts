@@ -22,11 +22,18 @@ export const TRADER_START_MC = 20_000_000; // $200.00
 export const GEN_START_MC = 100_000_000; // $1,000.00 — paper money at a legible scale (median trade was $0.01 at $100)
 export const FEE_BPS = 10;
 
+// Third cohort, parallel to evolved/random, never replacing either — see
+// docs/superpowers/specs/2026-08-20-motor-executive-agents-design.md.
+// Trades identically to "evolved" (same genomeDirection); only its
+// generation-level policy (mutation bias, HR decisions, cash deployment)
+// is LLM-governed instead of rule-based.
+export type Cohort = "evolved" | "random" | "llm-governed";
+
 export interface TraderRuntime {
   id: string;
   slot: number;
   name: string;
-  cohort: "evolved" | "random";
+  cohort: Cohort;
   genome: Genome;
   deciderSeed: number; // deciderSeed used ONLY by the random cohort
   step: DirectionalStepState;
@@ -39,7 +46,7 @@ export interface TraderRuntime {
 }
 
 export interface CohortRuntime {
-  cohort: "evolved" | "random";
+  cohort: Cohort;
   generationId: string;
   genNumber: number;
   startedAt: number;
@@ -113,7 +120,16 @@ interface SeededTrader {
   seedNote: "elite-clone" | "elite-mutant" | "immigrant" | "fresh" | "random-control";
 }
 
-function seedEvolvedGenomes(genNumber: number, parentGenomes: Genome[] | null): SeededTrader[] {
+/**
+ * `mutateFn` defaults to plain `mutateGenome`; the llm-governed cohort
+ * passes a CEO-biased variant (see llm-agents.ts's mutateGenomeGuided) —
+ * same call shape, so this function stays agnostic to who's calling it.
+ */
+function seedEvolvedGenomes(
+  genNumber: number,
+  parentGenomes: Genome[] | null,
+  mutateFn: (genome: Genome, seed: number) => Genome = mutateGenome,
+): SeededTrader[] {
   if (parentGenomes === null || parentGenomes.length === 0) {
     return Array.from({ length: ROSTER_SIZE }, (_, slot) => ({
       genome: randomGenome(hashSeed(genNumber, slot)),
@@ -127,8 +143,8 @@ function seedEvolvedGenomes(genNumber: number, parentGenomes: Genome[] | null): 
 
   const slots: SeededTrader[] = [
     { genome: parent0, deciderSeed: 0, seedNote: "elite-clone" },
-    { genome: mutateGenome(parent0, hashSeed(genNumber, 1)), deciderSeed: 0, seedNote: "elite-mutant" },
-    { genome: mutateGenome(parent1, hashSeed(genNumber, 2)), deciderSeed: 0, seedNote: "elite-mutant" },
+    { genome: mutateFn(parent0, hashSeed(genNumber, 1)), deciderSeed: 0, seedNote: "elite-mutant" },
+    { genome: mutateFn(parent1, hashSeed(genNumber, 2)), deciderSeed: 0, seedNote: "elite-mutant" },
   ];
   for (let slot = 3; slot < ROSTER_SIZE; slot++) {
     slots.push({ genome: randomGenome(hashSeed(genNumber, slot)), deciderSeed: 0, seedNote: "immigrant" });
@@ -144,7 +160,7 @@ function seedRandomGenomes(genNumber: number): SeededTrader[] {
   }));
 }
 
-function generationSeedNote(cohort: "evolved" | "random", seeded: SeededTrader[]): string {
+function generationSeedNote(cohort: Cohort, seeded: SeededTrader[]): string {
   if (cohort === "random") return "random-control";
   if (seeded.every((s) => s.seedNote === "fresh")) return "fresh";
   const clones = seeded.filter((s) => s.seedNote === "elite-clone").length;
@@ -157,15 +173,17 @@ function generationSeedNote(cohort: "evolved" | "random", seeded: SeededTrader[]
   return parts.join(" + ");
 }
 
+const COHORT_NAME_SALT: Record<Cohort, number> = { evolved: 1, random: 2, "llm-governed": 3 };
+
 function makeTrader(
   s: SeededTrader,
   slot: number,
-  cohort: "evolved" | "random",
+  cohort: Cohort,
   genNumber: number,
   startedAt: number,
   mkId: () => string,
 ): TraderRuntime {
-  const cohortNum = cohort === "evolved" ? 1 : 2;
+  const cohortNum = COHORT_NAME_SALT[cohort];
   return {
     id: mkId(),
     slot,
@@ -184,7 +202,7 @@ function makeTrader(
 }
 
 function buildSeedEvents(
-  cohort: "evolved" | "random",
+  cohort: Cohort,
   genNumber: number,
   startedAt: number,
   generationId: string,
@@ -210,18 +228,19 @@ function buildSeedEvents(
 }
 
 export function seedGeneration(opts: {
-  cohort: "evolved" | "random";
+  cohort: Cohort;
   genNumber: number;
   startedAt: number;
   parentGenomes: Genome[] | null;
   generationId: string;
   mkId: () => string;
+  mutateFn?: (genome: Genome, seed: number) => Genome;
 }): { runtime: CohortRuntime; events: MotorEventDraft[] } {
-  const { cohort, genNumber, startedAt, parentGenomes, generationId, mkId } = opts;
+  const { cohort, genNumber, startedAt, parentGenomes, generationId, mkId, mutateFn } = opts;
 
-  const seeded = cohort === "evolved"
-    ? seedEvolvedGenomes(genNumber, parentGenomes)
-    : seedRandomGenomes(genNumber);
+  const seeded = cohort === "random"
+    ? seedRandomGenomes(genNumber)
+    : seedEvolvedGenomes(genNumber, parentGenomes, mutateFn);
 
   const traders = seeded.map((s, slot) => makeTrader(s, slot, cohort, genNumber, startedAt, mkId));
 
@@ -247,9 +266,9 @@ function decideDirection(
   ts: number,
   history: number[],
 ): Direction {
-  return t.cohort === "evolved"
-    ? genomeDirection(history, history.length - 1, t.genome)
-    : randomDirection(t.deciderSeed, ts, t.genome.minHoldBars + 1);
+  return t.cohort === "random"
+    ? randomDirection(t.deciderSeed, ts, t.genome.minHoldBars + 1)
+    : genomeDirection(history, history.length - 1, t.genome);
 }
 
 function buildStepEvents(

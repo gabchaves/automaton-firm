@@ -46,8 +46,9 @@ export const GENOME_BOUNDS = {
   genesMax: 3,
 } as const;
 
-const SIGNAL_FAMILIES = ["momentum", "meanReversion", "breakout"] as const;
+export const SIGNAL_FAMILIES = ["momentum", "meanReversion", "breakout"] as const;
 const ALL_FAMILIES = [...SIGNAL_FAMILIES, "regimeFilter"] as const;
+export type SignalGeneFamily = (typeof SIGNAL_FAMILIES)[number];
 const COMBINATORS = ["all", "majority", "any"] as const;
 
 export function isSignalGene(gene: Gene): boolean {
@@ -110,7 +111,9 @@ function clamp(v: number, lo: number, hi: number): number {
   return Math.min(hi, Math.max(lo, v));
 }
 
-function makeGene(rng: Rng, family: (typeof ALL_FAMILIES)[number]): Gene {
+/** Exported so llm-agents.ts's CEO mutation bias can synthesize a gene from
+ * a specific preferred family without duplicating the per-family bounds. */
+export function makeGene(rng: Rng, family: (typeof ALL_FAMILIES)[number]): Gene {
   if (family === "momentum") {
     const slowBars = randInt(rng, 12, 288);
     const fastBars = randInt(rng, 3, Math.min(48, slowBars - 1));

@@ -18,25 +18,49 @@ import { fetchClosedBars, BAR_MS } from "./feed.js";
 import {
   seedGeneration, stepCohortBar, topGenomes, firmEquityMc, traderEquityMc, hashSeed,
 } from "./cohort.js";
-import type { CohortRuntime, TraderRuntime } from "./cohort.js";
+import type { CohortRuntime, TraderRuntime, Cohort } from "./cohort.js";
 import { mulberry32 } from "../trading/deciders.js";
-import { runHrReview } from "./hr.js";
+import { runHrReview, computeHrAssessments, applyHrDecision } from "./hr.js";
+import type { HrReviewResult } from "./hr.js";
 import { evaluateAchievements } from "./achievements.js";
 import { emitEvents } from "./events.js";
 import type { MotorEventDraft } from "./events.js";
-import { GenomeSchema } from "../trading/genome.js";
+import { GenomeSchema, SIGNAL_FAMILIES } from "../trading/genome.js";
+import type { Genome, SignalGeneFamily } from "../trading/genome.js";
 import type { DirectionalStepState } from "../trading/directional-step.js";
+import {
+  isLlmAvailable, decideHrLlm, decideCfoDeployment, decideCeoGuidance, mutateGenomeGuided,
+} from "./llm-agents.js";
+import type { SpendCap, CeoGuidance, ChatClient } from "./llm-agents.js";
 
 export const SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT"] as const;
 export const BOOTSTRAP_MS = 8 * 24 * 3_600_000; // history for lookbacks + first HR window
 export const CATCH_UP_ANNOUNCE_BARS = 12;
 export const HR_DAY_MS = 86_400_000;
+// llm-governed's HR/CFO review cadence — coarser than the rule-based HR's
+// daily review specifically to bound inference cost (see the design spec's
+// cost-safety section); the evaluation WINDOW (HR_WINDOW_MS in hr.ts) is
+// unaffected, only how often a review fires.
+export const LLM_REVIEW_INTERVAL_MS = 3 * HR_DAY_MS;
 
 /** Rolling history cap per symbol: >> the widest genome lookback (288 bars). */
 const MAX_HISTORY_BARS = 2_400;
 
-const COHORTS = ["evolved", "random"] as const;
-type Cohort = (typeof COHORTS)[number];
+const RULE_BASED_COHORTS = ["evolved", "random"] as const;
+
+/**
+ * Optional — omitting this entirely reproduces today's exact two-cohort
+ * behavior byte-for-byte (existing tests never pass it). When present, the
+ * llm-governed cohort is seeded only if `isLlmAvailable(providerConfigPath)`
+ * — a capability check, not a feature flag: no config, no cohort, same as a
+ * fresh deploy that never configured inference at all.
+ */
+export interface LlmDeps {
+  providerConfigPath: string;
+  client: ChatClient;
+  spendCap: SpendCap;
+  log?: (line: string) => void;
+}
 
 export interface TickReport {
   barsProcessed: number;
@@ -215,16 +239,21 @@ async function fetchAndStoreBars(
   return fetched;
 }
 
-/** First boot only: seed both cohorts at the first bar timestamp ever seen. */
-function ensureInitialized(db: MotorDb, firstBarTs: number | null): void {
+/** First boot only: seed both (or all three) cohorts at the first bar
+ * timestamp ever seen. llm-governed joins only when `llmDeps` resolves a
+ * real provider — a capability check, not a feature flag. */
+function ensureInitialized(db: MotorDb, firstBarTs: number | null, llmDeps: LlmDeps | undefined): void {
   if (firstBarTs === null) return;
   if (db.getLiveGeneration("evolved") !== null) return;
   if (db.getMeta("initialized") !== null) return;
 
+  const cohorts: Cohort[] = [...RULE_BASED_COHORTS];
+  if (llmDeps && isLlmAvailable(llmDeps.providerConfigPath)) cohorts.push("llm-governed");
+
   db.tx(() => {
     const mkId = createMkId(firstBarTs, 0);
     const events: MotorEventDraft[] = [];
-    for (const cohort of COHORTS) {
+    for (const cohort of cohorts) {
       const generationId = mkId();
       const seeded = seedGeneration({
         cohort, genNumber: 1, startedAt: firstBarTs, parentGenomes: null, generationId, mkId,
@@ -243,6 +272,7 @@ function handleGenerationEnd(
   ts: number,
   closeBySymbol: Map<string, number>,
   mkId: () => string,
+  mutateFn?: (genome: Genome, seed: number) => Genome,
 ): { runtime: CohortRuntime; events: MotorEventDraft[] } {
   const events: MotorEventDraft[] = [];
   const previousRecordMc = db.getBestEndedRecordMc(deadRuntime.cohort);
@@ -284,7 +314,7 @@ function handleGenerationEnd(
   persistCohort(db, deadRuntime);
   db.updateGeneration(deadRuntime.generationId, { endedAt: ts });
 
-  const parentGenomes = deadRuntime.cohort === "evolved" ? topGenomes(deadRuntime, 2) : null;
+  const parentGenomes = deadRuntime.cohort === "random" ? null : topGenomes(deadRuntime, 2);
   const generationId = mkId();
   const seeded = seedGeneration({
     cohort: deadRuntime.cohort,
@@ -293,6 +323,7 @@ function handleGenerationEnd(
     parentGenomes,
     generationId,
     mkId,
+    mutateFn,
   });
 
   insertCohortRows(db, seeded.runtime, seedNoteFromEvents(seeded.events));
@@ -328,6 +359,17 @@ function closesAt(db: MotorDb, ts: number, history: Map<string, number[]>): Map<
 interface CohortPair {
   evolved: CohortRuntime;
   random: CohortRuntime;
+  llmGoverned: CohortRuntime | null;
+}
+
+/** Everything an llm-governed bar might need, resolved ASYNCHRONOUSLY
+ * before db.tx() (better-sqlite3 transactions cannot await) — see
+ * llm-agents.ts's module doc and resolveLlmBarInputs below. Both fields are
+ * independently optional: a review-cadence bar and a generation-end bar are
+ * different triggers that can (rarely) coincide. */
+interface LlmBarInputs {
+  hrCfo?: { hrDecision: import("../trading/hr-evaluation.js").HrDecision; cfoDeployFraction: number };
+  ceoGuidance?: CeoGuidance;
 }
 
 function processBar(
@@ -336,25 +378,41 @@ function processBar(
   cohorts: CohortPair,
   closeBySymbol: Map<string, number>,
   historyBySymbol: Map<string, number[]>,
+  llmInputs: LlmBarInputs | null,
 ): CohortPair {
   const mkId = createMkId(ts, 1);
   const drafts: MotorEventDraft[] = [];
 
-  // a. step both cohorts one bar.
+  // a. step every cohort one bar.
   const evolvedStep = stepCohortBar(cohorts.evolved, ts, historyBySymbol, closeBySymbol);
   const randomStep = stepCohortBar(cohorts.random, ts, historyBySymbol, closeBySymbol);
+  const llmStep = cohorts.llmGoverned ? stepCohortBar(cohorts.llmGoverned, ts, historyBySymbol, closeBySymbol) : null;
   let evolved = evolvedStep.runtime;
   let random = randomStep.runtime;
-  drafts.push(...evolvedStep.events, ...randomStep.events);
+  let llmGoverned = llmStep?.runtime ?? null;
+  drafts.push(...evolvedStep.events, ...randomStep.events, ...(llmStep?.events ?? []));
 
   // b. achievements, keyed off this bar's step events.
   drafts.push(...evaluateAchievements({ db, runtime: evolved, ts, closeBySymbol, stepEvents: evolvedStep.events }));
   drafts.push(...evaluateAchievements({ db, runtime: random, ts, closeBySymbol, stepEvents: randomStep.events }));
+  if (llmGoverned && llmStep) {
+    drafts.push(...evaluateAchievements({ db, runtime: llmGoverned, ts, closeBySymbol, stepEvents: llmStep.events }));
+  }
 
-  // c. HR review (evolved only), once a day.
+  // c. HR review: evolved daily (rule-based), llm-governed on its own
+  // coarser cadence (LLM-backed, decision already resolved pre-tx).
   if (ts % HR_DAY_MS === 0) {
     const hrResult = runHrReview({ db, evolved, random, ts, closeBySymbol, mkId });
     evolved = hrResult.evolved;
+    drafts.push(...hrResult.events);
+  }
+  if (llmGoverned && llmInputs?.hrCfo) {
+    const { assessments, benchmarkCents } = computeHrAssessments(db, llmGoverned, random, ts, closeBySymbol);
+    const hrResult = applyHrDecision({
+      db, evolved: llmGoverned, random, ts, closeBySymbol, mkId, assessments, benchmarkCents,
+      decision: llmInputs.hrCfo.hrDecision, deployFraction: llmInputs.hrCfo.cfoDeployFraction,
+    });
+    llmGoverned = hrResult.evolved;
     drafts.push(...hrResult.events);
   }
 
@@ -368,6 +426,12 @@ function processBar(
   for (const t of random.traders) {
     if (t.status === "live") db.insertTraderSnapshot(ts, t.id, traderEquityMc(t, closeBySymbol));
   }
+  if (llmGoverned) {
+    db.insertEquitySnapshot(ts, "llm-governed", firmEquityMc(llmGoverned, closeBySymbol));
+    for (const t of llmGoverned.traders) {
+      if (t.status === "live") db.insertTraderSnapshot(ts, t.id, traderEquityMc(t, closeBySymbol));
+    }
+  }
 
   // e. generation-end handling + respawn.
   if (evolvedStep.generationEnded) {
@@ -380,15 +444,89 @@ function processBar(
     random = ended.runtime;
     drafts.push(...ended.events);
   }
+  if (llmStep?.generationEnded && llmGoverned) {
+    const guidance = llmInputs?.ceoGuidance;
+    const mutateFn = guidance
+      ? (genome: Genome, seed: number) => mutateGenomeGuided(genome, seed, guidance)
+      : undefined;
+    const ended = handleGenerationEnd(db, llmGoverned, ts, closeBySymbol, mkId, mutateFn);
+    llmGoverned = ended.runtime;
+    drafts.push(...ended.events);
+  }
 
   // f. persist everything this bar produced, atomically.
   emitEvents(db, drafts);
 
   persistCohort(db, evolved);
   persistCohort(db, random);
+  if (llmGoverned) persistCohort(db, llmGoverned);
   db.setMeta("lastProcessedTs", String(ts));
 
-  return { evolved, random };
+  return { evolved, random, llmGoverned };
+}
+
+/**
+ * Resolves everything llm-governed needs for this bar BEFORE the
+ * synchronous db.tx() that will actually process it — the only place in
+ * tick() that awaits. A pure "dry run" stepCohortBar call here (discarded
+ * afterward; processBar computes the real one again inside the tx) is what
+ * lets this function see generationEnded without any DB write happening
+ * outside the transaction. Returns null when there is no llm-governed
+ * cohort at all, or nothing to resolve this bar (no review, no
+ * generation-end) — the common case, costing nothing.
+ */
+async function resolveLlmBarInputs(
+  db: MotorDb,
+  ts: number,
+  cohorts: CohortPair,
+  closeBySymbol: Map<string, number>,
+  historyBySymbol: Map<string, number[]>,
+  llmDeps: LlmDeps,
+): Promise<LlmBarInputs | null> {
+  if (!cohorts.llmGoverned) return null;
+  const dryStep = stepCohortBar(cohorts.llmGoverned, ts, historyBySymbol, closeBySymbol);
+  const inputs: LlmBarInputs = {};
+
+  if (ts % LLM_REVIEW_INTERVAL_MS === 0) {
+    const { assessments, benchmarkCents } = computeHrAssessments(db, dryStep.runtime, cohorts.random, ts, closeBySymbol);
+    const genNumber = dryStep.runtime.genNumber;
+    const [hrDecision, cfo] = await Promise.all([
+      decideHrLlm({
+        db, client: llmDeps.client, spendCap: llmDeps.spendCap, genNumber, ts, assessments, benchmarkCents,
+        log: llmDeps.log,
+      }),
+      decideCfoDeployment({
+        db, client: llmDeps.client, spendCap: llmDeps.spendCap, genNumber, ts,
+        reserveMc: dryStep.runtime.reserveMc,
+        liveCount: dryStep.runtime.traders.filter((t) => t.status === "live").length,
+        rosterSize: dryStep.runtime.traders.length,
+        trailingEquityTrendMc: [firmEquityMc(dryStep.runtime, closeBySymbol)],
+        log: llmDeps.log,
+      }),
+    ]);
+    inputs.hrCfo = { hrDecision, cfoDeployFraction: cfo.deployFraction };
+  }
+
+  if (dryStep.generationEnded) {
+    const finalEquityMc = firmEquityMc(dryStep.runtime, closeBySymbol);
+    const topFamilies = topGenomes(dryStep.runtime, 2).map(
+      (g) => g.genes.map((gene) => gene.family).filter((f): f is SignalGeneFamily =>
+        (SIGNAL_FAMILIES as readonly string[]).includes(f)),
+    );
+    inputs.ceoGuidance = await decideCeoGuidance({
+      db, client: llmDeps.client, spendCap: llmDeps.spendCap,
+      genNumber: dryStep.runtime.genNumber, ts,
+      history: [{
+        genNumber: dryStep.runtime.genNumber,
+        peakEquityMc: dryStep.runtime.peakEquityMc,
+        finalEquityMc,
+        topGenomeFamilies: topFamilies,
+      }],
+      log: llmDeps.log,
+    });
+  }
+
+  return inputs.hrCfo || inputs.ceoGuidance ? inputs : null;
 }
 
 export async function tick(deps: {
@@ -396,15 +534,17 @@ export async function tick(deps: {
   nowMs: number;
   fetchImpl?: typeof fetch;
   log?: (line: string) => void;
+  llmDeps?: LlmDeps;
 }): Promise<TickReport> {
-  const { db, nowMs, fetchImpl = fetch, log = () => {} } = deps;
+  const { db, nowMs, fetchImpl = fetch, log = () => {}, llmDeps } = deps;
 
   // 1. Fetch new closed bars per symbol.
   const fetched = await fetchAndStoreBars(db, nowMs, fetchImpl, log);
 
-  // 2. Boot both cohorts on first run.
+  // 2. Boot cohorts on first run — llmDeps omitted or unavailable
+  // reproduces the exact pre-llm-governed two-cohort behavior.
   const firstBarTs = db.listBarTimestamps(-1)[0] ?? null;
-  ensureInitialized(db, firstBarTs);
+  ensureInitialized(db, firstBarTs, llmDeps);
 
   // 3. Process every new bar timestamp, ascending, each in its own tx —
   // but only up to the SLOWEST symbol's fetch cursor. Advancing past a
@@ -436,12 +576,19 @@ export async function tick(deps: {
     let cohorts: CohortPair = {
       evolved: loadRuntime(db, "evolved")!,
       random: loadRuntime(db, "random")!,
+      llmGoverned: loadRuntime(db, "llm-governed"),
     };
 
     for (const ts of timestamps) {
       const closeBySymbol = closesAt(db, ts, historyBySymbol);
+      // The only await in this loop — resolved BEFORE the synchronous
+      // db.tx() below, which cannot itself await. Null whenever there's no
+      // llm-governed cohort, or nothing for it to decide this bar.
+      const llmInputs = llmDeps && cohorts.llmGoverned
+        ? await resolveLlmBarInputs(db, ts, cohorts, closeBySymbol, historyBySymbol, llmDeps)
+        : null;
       db.tx(() => {
-        cohorts = processBar(db, ts, cohorts, closeBySymbol, historyBySymbol);
+        cohorts = processBar(db, ts, cohorts, closeBySymbol, historyBySymbol, llmInputs);
       });
       toTs = ts;
     }

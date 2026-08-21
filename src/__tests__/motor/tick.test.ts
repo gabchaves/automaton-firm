@@ -1,11 +1,13 @@
-import { afterEach, describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import { mkdtempSync, rmSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import { openMotorDb } from "../../motor/db.js";
 import type { MotorDb } from "../../motor/db.js";
 import { BAR_MS } from "../../motor/feed.js";
-import { SYMBOLS, tick } from "../../motor/tick.js";
+import { SYMBOLS, tick, LLM_REVIEW_INTERVAL_MS } from "../../motor/tick.js";
+import { SpendCap } from "../../motor/llm-agents.js";
+import type { ChatClient } from "../../motor/llm-agents.js";
 
 const dirs: string[] = [];
 const dbs: MotorDb[] = [];
@@ -113,5 +115,89 @@ describe("tick", () => {
     expect(report2.barsProcessed).toBe(200);
     const solBars = db.raw.prepare("SELECT COUNT(*) AS n FROM bars WHERE symbol = 'SOLUSDT'").get() as { n: number };
     expect(solBars.n).toBe(200);
+  });
+});
+
+describe("tick with llmDeps (llm-governed cohort)", () => {
+  function mockLlmClient(): ChatClient & { chat: ReturnType<typeof vi.fn> } {
+    return {
+      chat: vi.fn().mockImplementation(async (params: { messages: { content: string }[] }) => {
+        const systemPrompt = params.messages[0]?.content ?? "";
+        const content = systemPrompt.includes("HR director")
+          ? JSON.stringify({ promote: [], retire: [], hold: [] })
+          : systemPrompt.includes("CFO")
+            ? JSON.stringify({ deployFraction: 1, holdReason: "test" })
+            : JSON.stringify({ preferredFamilies: [], leverageBias: "neutral", notes: "test" });
+        return {
+          content,
+          usage: { inputTokens: 100, outputTokens: 20, totalTokens: 120 },
+          cost: { inputCostCredits: 0, outputCostCredits: 0, totalCostCredits: 0 },
+          metadata: { providerId: "test", modelId: "test-model", tier: "reasoning", latencyMs: 1, retries: 0, failedProviders: [] },
+        };
+      }),
+    };
+  }
+
+  test("omitting llmDeps entirely never seeds llm-governed — same two-cohort behavior as before", async () => {
+    const db = fresh();
+    const market = buildMarket(100);
+    await tick({ db, nowMs: 100 * BAR_MS, fetchImpl: syntheticFetch(market) });
+    expect(db.getLiveGeneration("llm-governed")).toBeNull();
+  });
+
+  test("with llmDeps, seeds a third cohort that trades and runs its own review cycle", async () => {
+    const db = fresh();
+    const barsNeeded = Math.ceil(LLM_REVIEW_INTERVAL_MS / BAR_MS) + 5; // cross one review boundary
+    const market = buildMarket(barsNeeded);
+    const client = mockLlmClient();
+    const spendCap = new SpendCap(1);
+
+    const report = await tick({
+      db, nowMs: barsNeeded * BAR_MS, fetchImpl: syntheticFetch(market),
+      llmDeps: { providerConfigPath: "/nonexistent/path/never/read/by/mock", client, spendCap },
+    });
+
+    expect(report.barsProcessed).toBeGreaterThan(0);
+    const llmGen = db.getLiveGeneration("llm-governed");
+    expect(llmGen).not.toBeNull();
+    expect(llmGen!.genNumber).toBe(1);
+
+    // It traded (same genomeDirection path as evolved) — at least one bar's
+    // equity snapshot was recorded for it.
+    const snapshotCount = db.raw
+      .prepare("SELECT COUNT(*) AS n FROM equity_snapshots WHERE cohort = 'llm-governed'")
+      .get() as { n: number };
+    expect(snapshotCount.n).toBeGreaterThan(0);
+
+    // The review cycle actually ran and journaled both HR and CFO decisions.
+    expect(client.chat).toHaveBeenCalled();
+    const hrRows = db.raw.prepare("SELECT COUNT(*) AS n FROM llm_decisions WHERE role = 'hr'").get() as { n: number };
+    const cfoRows = db.raw.prepare("SELECT COUNT(*) AS n FROM llm_decisions WHERE role = 'cfo'").get() as { n: number };
+    expect(hrRows.n).toBeGreaterThan(0);
+    expect(cfoRows.n).toBeGreaterThan(0);
+  });
+
+  test("a second identical run over the same window never re-calls the LLM for already-journaled decisions", async () => {
+    const barsNeeded = Math.ceil(LLM_REVIEW_INTERVAL_MS / BAR_MS) + 5;
+    const market = buildMarket(barsNeeded);
+    const nowMs = barsNeeded * BAR_MS;
+
+    const clientA = mockLlmClient();
+    const dbA = fresh();
+    await tick({
+      db: dbA, nowMs, fetchImpl: syntheticFetch(market),
+      llmDeps: { providerConfigPath: "/nonexistent", client: clientA, spendCap: new SpendCap(1) },
+    });
+    const callsFirstRun = clientA.chat.mock.calls.length;
+    expect(callsFirstRun).toBeGreaterThan(0);
+
+    // Second tick() call on the SAME db: no new bars to process at all, so
+    // the LLM is not called again — the ordinary idempotence path, not even
+    // reaching the journal lookup.
+    await tick({
+      db: dbA, nowMs, fetchImpl: syntheticFetch(market),
+      llmDeps: { providerConfigPath: "/nonexistent", client: clientA, spendCap: new SpendCap(1) },
+    });
+    expect(clientA.chat.mock.calls.length).toBe(callsFirstRun);
   });
 });
