@@ -278,11 +278,12 @@ export function runHrReview(deps: {
   ts: number;
   closeBySymbol: Map<string, number>;
   mkId: () => string;
+  deployFraction?: number;
 }): HrReviewResult {
-  const { db, evolved, random, ts, closeBySymbol, mkId } = deps;
+  const { db, evolved, random, ts, closeBySymbol, mkId, deployFraction } = deps;
   const { assessments, benchmarkCents } = computeHrAssessments(db, evolved, random, ts, closeBySymbol);
   const decision = decideHrActions(assessments);
-  return applyHrDecision({ db, evolved, random, ts, closeBySymbol, mkId, assessments, benchmarkCents, decision });
+  return applyHrDecision({ db, evolved, random, ts, closeBySymbol, mkId, assessments, benchmarkCents, decision, deployFraction });
 }
 
 /**

@@ -601,3 +601,36 @@ llm-governed cohort's 3-day review cadence, not `evolved`'s daily one — the
 next step, if this gets promoted, is confirming the effect holds at
 `evolved`'s actual daily cadence too (a fast, free, one-more-check test)
 before changing what the live-traded firm on Palco actually does.
+
+## Daily-cadence check + shipped (2026-08-21, live era)
+
+**Question:** the validation above ran at llm-governed's 3-day review
+cadence — does deployFraction=0.3 still win at `evolved`'s actual daily
+cadence, the one that would actually change?
+
+**Setup:** reused all 12 window DBs already fetched this session (the 6
+that discovered the rule + the 6 that validated it out-of-sample) — zero
+new network calls. `evolved`'s real recorded performance (daily cadence,
+deploy 100%) was already persisted in each from when the DB was created;
+only a "conservative-daily" variant (daily cadence, deployFraction=0.3) was
+re-simulated on the same bars, same re-sim-matches-real check as before.
+
+**Result: 11/12 wins, mean final-edge +8.81%, peak-edge mean +0.02%** — the
+predicted null, confirming again this is a capital-efficiency effect, not
+a trading-decision one. Slightly smaller than the 3-day cadence's +10.98%,
+consistent with less capital sitting idle for a shorter average gap between
+reviews — still a clear, robust majority.
+
+**Shipped.** `src/motor/tick.ts` now calls `evolved`'s real `runHrReview`
+with `deployFraction: EVOLVED_DEPLOY_FRACTION` (= 0.3) instead of the old
+implicit 1.0 — this changes what the live-traded firm on Palco actually
+does going forward. `runHrReview`'s own default stays 1.0 when
+`deployFraction` isn't passed, so every existing caller and test that
+doesn't specify it is unaffected; only this one call site changed. A
+regression-guard test pins the constant's value so it can't silently drift
+without whoever changes it seeing this entry.
+
+This is, honestly, a fee-avoidance parameter fix, not a smarter firm — and
+it says so on the tin. But it is the first change in this entire document,
+across every experiment since 2026-08-16, that moved a real, out-of-sample-
+validated number on the live system's own mechanics.

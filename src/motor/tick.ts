@@ -43,6 +43,17 @@ export const HR_DAY_MS = 86_400_000;
 // unaffected, only how often a review fires.
 export const LLM_REVIEW_INTERVAL_MS = 3 * HR_DAY_MS;
 
+// evolved's HR used to always deploy 100% of the reserve into a new hire as
+// soon as MIN_HIRE_STAKE_MC (hr.ts) was available. Measured out-of-sample
+// (docs/TRADING-RESEARCH.md, "Deploy-fraction validation: it held up",
+// 2026-08-21): holding back to 30% wins on final equity in 11/12 disjoint
+// 90-day windows (mean +8.81%), with peak-edge staying at the predicted
+// null (+0.02%) — trading decisions are unchanged, this is purely less fee
+// paid on capital redeployed faster than it needed to be, not smarter
+// selection. Discovered post-hoc, then pre-registered and validated before
+// landing here — see that doc entry for the full methodology.
+export const EVOLVED_DEPLOY_FRACTION = 0.3;
+
 /** Rolling history cap per symbol: >> the widest genome lookback (288 bars). */
 const MAX_HISTORY_BARS = 2_400;
 
@@ -402,7 +413,9 @@ function processBar(
   // c. HR review: evolved daily (rule-based), llm-governed on its own
   // coarser cadence (LLM-backed, decision already resolved pre-tx).
   if (ts % HR_DAY_MS === 0) {
-    const hrResult = runHrReview({ db, evolved, random, ts, closeBySymbol, mkId });
+    const hrResult = runHrReview({
+      db, evolved, random, ts, closeBySymbol, mkId, deployFraction: EVOLVED_DEPLOY_FRACTION,
+    });
     evolved = hrResult.evolved;
     drafts.push(...hrResult.events);
   }

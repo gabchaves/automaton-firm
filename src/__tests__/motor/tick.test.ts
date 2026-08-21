@@ -5,7 +5,7 @@ import { join } from "path";
 import { openMotorDb } from "../../motor/db.js";
 import type { MotorDb } from "../../motor/db.js";
 import { BAR_MS } from "../../motor/feed.js";
-import { SYMBOLS, tick, LLM_REVIEW_INTERVAL_MS } from "../../motor/tick.js";
+import { SYMBOLS, tick, LLM_REVIEW_INTERVAL_MS, EVOLVED_DEPLOY_FRACTION } from "../../motor/tick.js";
 import { SpendCap } from "../../motor/llm-agents.js";
 import type { ChatClient } from "../../motor/llm-agents.js";
 
@@ -200,4 +200,13 @@ describe("tick with llmDeps (llm-governed cohort)", () => {
     });
     expect(clientA.chat.mock.calls.length).toBe(callsFirstRun);
   });
+});
+
+// Regression guard for the constant itself, not the mechanism (applyHrDecision's
+// deployFraction behavior is already covered thoroughly in hr.test.ts). Validated
+// out-of-sample 2026-08-21 (docs/TRADING-RESEARCH.md, "Deploy-fraction validation:
+// it held up") — changing this value silently, without re-running that validation,
+// would be shipping an unmeasured change to the live-traded firm.
+test("EVOLVED_DEPLOY_FRACTION is the out-of-sample-validated value (0.3), not the old always-deploy default", () => {
+  expect(EVOLVED_DEPLOY_FRACTION).toBe(0.3);
 });
