@@ -536,12 +536,68 @@ skill in a fee-punishing simulation regardless of who or what decided to
 do less. The LLM executive layer is not shown to add judgment beyond what a
 static capital-allocation rule already provides.
 
-**Secondary finding, unrelated to the LLM question, worth its own future
-test:** a fixed conservative deployment fraction on the existing mechanical
-`evolved` HR is itself a free, untested lever — it was never part of this
-project's search space before. It is explicitly NOT recommended for
-deployment from this measurement alone (N=6, not out-of-sample validated,
-discovered post-hoc while investigating something else — exactly the
-condition under which this project's own rules say not to trust a number).
-It would need its own pre-registered, disjoint-window test before being
-believed.
+**Secondary finding, unrelated to the LLM question:** a fixed conservative
+deployment fraction on the existing mechanical `evolved` HR is itself a
+free, previously-untested lever. Discovered post-hoc while investigating
+something else, on the same 6 windows the LLM question was measured on —
+exactly the condition under which this project's own rules say not to trust
+a number yet. Not recommended for deployment from this measurement alone.
+Validated out-of-sample below.
+
+## Deploy-fraction validation: it held up (2026-08-21, live era)
+
+**Question:** does the capital-conservatism finding above survive contact
+with data it has never seen, or was it fit to the noise of the 6 windows
+that discovered it?
+
+**Setup:** pre-registered BEFORE running anything
+(`scripts/deploy-fraction-validation.mjs`): rule-based HR (no LLM), 3-day
+review cadence, `deployFraction=0.3` fixed, tested against `evolved`
+(today's default: daily review, deploy 100%) on the **next 6 disjoint
+90-day windows further back in time** than the 6 already used — genuinely
+unseen, non-overlapping, 2023-09-06 through 2025-02-27. Decision rule fixed
+in advance: the finding holds only if the conservative variant wins on
+final-equity in ≥4 of 6 new windows. Baseline came from a real
+`runBacktest()` call (unmodified `backtest.mjs`, real Binance candles); the
+conservative variant re-simulated on the same already-fetched bars using
+the exact production functions, with a re-simulated `random` verified
+byte-identical to the real one in all 6 windows before trusting anything.
+
+**Result: 6 for 6.**
+
+| Window | Period | final-edge (conservative − evolved) | peak-edge |
+|---|---|---|---|
+| W11 | 2023-09-06 → 12-05 | +12.29% | +0.00% |
+| W10 | 2023-12-05 → 2024-03-04 | +10.43% | +0.00% |
+| W9 | 2024-03-04 → 06-02 | +5.90% | +0.00% |
+| W8 | 2024-06-02 → 08-31 | +10.44% | −0.04% |
+| W7 | 2024-08-31 → 11-29 | +12.44% | +0.00% |
+| W6 | 2024-11-29 → 2025-02-27 | +14.41% | +0.00% |
+
+Mean final-edge **+10.98%** — nearly identical to the +10.7pp mean measured
+on the original 6 (different market regimes, same effect size, a good sign
+this is mechanical rather than a fit to one period's noise). Peak-edge mean
+**−0.01%**, exactly the predicted null: this is not a directional signal,
+the genomes and trading decisions are unchanged — it is purely a capital-
+efficiency effect. **The finding holds.**
+
+**What this actually is, so it doesn't get oversold:** the mechanical HR's
+default (deploy 100% of the reserve into a new hire the moment
+`MIN_HIRE_STAKE_MC` is available) pays more in fees than it needs to,
+because it redeploys capital as fast as possible rather than holding some
+back. This is not the evolved genome population being smarter, not better
+selection, not market skill of any kind — the peak-edge null and the fact
+that trading decisions are byte-identical between the two variants prove
+that directly. It is a **capital-allocation inefficiency in the existing
+mechanical system**, fixable with one parameter, that would apply to any
+firm on this fee structure — including a random one. Given the same fee
+churn pattern already found three times this session at other layers
+(random control's per-bar redecision, HR review cadence ruled out as the
+cause here, now capital deployment rate), this reads as the same underlying
+lesson recurring, not a fourth independent discovery.
+
+**Not yet shipped to `evolved`'s live default.** The validation used the
+llm-governed cohort's 3-day review cadence, not `evolved`'s daily one — the
+next step, if this gets promoted, is confirming the effect holds at
+`evolved`'s actual daily cadence too (a fast, free, one-more-check test)
+before changing what the live-traded firm on Palco actually does.
